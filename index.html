@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Therapist Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-button active" data-tab="search">Search</button>
+            <button class="tab-button" data-tab="add-therapist">Add Therapist</button>
+            <button class="tab-button" data-tab="edit-booking">Edit Booking</button>
+        </div>
+
+        <div id="search" class="tab-content active">
+            <h2>Search Schedule by Location</h2>
+            <div class="search-form">
+                <input type="text" id="search-cross-streets" placeholder="Cross Streets (e.g., Oak St & Maple Ave)">
+                <input type="text" id="search-city" placeholder="City">
+                <input type="text" id="search-state" placeholder="State">
+                <input type="text" id="search-zip" placeholder="Zip">
+                <button id="search-button" class="btn btn-primary">Search</button>
+            </div>
+
+            <!-- New Therapist/Filter controls -->
+            <div class="search-filters" style="margin: 12px 0;">
+                <label style="margin-right:8px;">Therapist:
+                    <select id="search-therapist-select">
+                        <option value="">Select Therapist...</option>
+                    </select>
+                </label>
+                <span style="margin:0 10px;"></span>
+                <label>Borough:
+                    <span id="search-borough-filter" class="checkbox-group" style="margin-left:6px;">
+                        <label><input type="checkbox" value="Manhattan"> Manhattan</label>
+                        <label><input type="checkbox" value="Bronx"> Bronx</label>
+                        <label><input type="checkbox" value="Brooklyn"> Brooklyn</label>
+                        <label><input type="checkbox" value="Queens"> Queens</label>
+                        <label><input type="checkbox" value="Staten Island"> Staten Island</label>
+                    </span>
+                </label>
+                <span style="margin:0 10px;"></span>
+                <label>Max Hours:
+                    <input type="number" id="search-max-hours" placeholder="e.g. 20" min="0" style="width:90px; margin-left:6px;">
+                </label>
+            </div>
+            
+            <div class="schedule-container">
+                <h3>Required Availability - <span id="search-schedule-title">Select a location & slots</span></h3>
+                <div class="schedule-controls">
+                    <label><input type="checkbox" id="toggle-compact-search"> Compact</label>
+                    <label>Increment:
+                        <select id="increment-search">
+                            <option value="15" selected>15 min</option>
+                            <option value="30">30 min</option>
+                            <option value="60">60 min</option>
+                        </select>
+                    </label>
+                </div>
+
+                <!-- Legend for Search -->
+                <div id="search-legend" class="legend-item" style="margin: 6px 0;">
+                    <span class="legend-swatch" style="background-color:#007bff;"></span>
+                    <span>Required availability (Your selected slots)</span>
+                    <span style="margin-left:14px;"></span>
+                    <span class="legend-swatch" style="background-color:#ff4d4f;"></span>
+                    <span>Therapist currently scheduled</span>
+                </div>
+                <div id="search-schedule-grid" class="schedule-grid">
+                    <div class="grid-header">Time</div>
+                    <div class="grid-header">Sunday</div>
+                    <div class="grid-header">Monday</div>
+                    <div class="grid-header">Tuesday</div>
+                    <div class="grid-header">Wednesday</div>
+                    <div class="grid-header">Thursday</div>
+                    <div class="grid-header">Friday</div>
+                    <div class="grid-header">Saturday</div>
+                </div>
+            </div>
+            
+            <div id="search-results-section" style="margin-top: 20px;">
+                <h3>Search Results</h3>
+                <ul id="search-results-list">
+                    </ul>
+            </div>
+        </div>
+
+        <div id="add-therapist" class="tab-content">
+            <h2>Manage Therapists</h2>
+            <button id="add-new-therapist-button" class="btn btn-primary">Add New Therapist</button>
+            <div class="data-controls">
+                <button id="export-data-button" class="btn btn-outline">Export Data</button>
+                <label class="import-button">
+                    <input type="file" id="import-data-input" accept="application/json" style="display:none;">
+                    <span class="btn btn-outline">Import Data</span>
+                </label>
+            </div>
+            <div class="form-field" style="margin-top:10px;">
+                <label>Filter by Borough</label>
+                <div class="checkbox-group" id="borough-filter-group">
+                    <label><input type="checkbox" name="borough-filter" value="Manhattan"> Manhattan</label>
+                    <label><input type="checkbox" name="borough-filter" value="Bronx"> Bronx</label>
+                    <label><input type="checkbox" name="borough-filter" value="Brooklyn"> Brooklyn</label>
+                    <label><input type="checkbox" name="borough-filter" value="Queens"> Queens</label>
+                    <label><input type="checkbox" name="borough-filter" value="Staten Island"> Staten Island</label>
+                </div>
+            </div>
+
+            <div id="add-therapist-form" class="add-therapist-form">
+                <input type="text" id="new-therapist-first-name" placeholder="First Name">
+                <input type="text" id="new-therapist-last-name" placeholder="Last Name">
+                <input type="text" id="new-therapist-email" placeholder="Email Address">
+                <input type="text" id="new-therapist-phone" placeholder="Phone Number">
+                <div class="form-field">
+                    <label>Borough Preferences</label>
+                    <div class="checkbox-group" id="borough-prefs-group">
+                        <label><input type="checkbox" name="borough-pref" value="Manhattan"> Manhattan</label>
+                        <label><input type="checkbox" name="borough-pref" value="Bronx"> Bronx</label>
+                        <label><input type="checkbox" name="borough-pref" value="Brooklyn"> Brooklyn</label>
+                        <label><input type="checkbox" name="borough-pref" value="Queens"> Queens</label>
+                        <label><input type="checkbox" name="borough-pref" value="Staten Island"> Staten Island</label>
+                    </div>
+                </div>
+                <button id="save-therapist-button" class="btn btn-success">Save Therapist</button>
+            </div>
+
+            <div class="therapist-list">
+                <h3>Current Therapists</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Phone Number</th>
+                            <th>Email Address</th>
+                            <th>Total Hours Scheduled</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="therapist-list-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="edit-booking" class="tab-content">
+            <div class="therapist-header">
+                <h2>Therapist Schedule Editor</h2>
+                <h1 id="current-therapist-display-name">Select a Therapist</h1>
+                <div id="current-therapist-boroughs" class="borough-chips"></div>
+            </div>
+
+            <div class="therapist-selection-wrapper">
+                <label for="therapist-select-dropdown">Therapist:</label>
+                <select id="therapist-select-dropdown">
+                    <option value="">Select Therapist...</option>
+                </select>
+            </div>
+
+            <div class="case-selector">
+                <label for="case-dropdown">Current Case:</label>
+                <select id="case-dropdown">
+                    <option value="all">View All Cases</option>
+                    <option value="">Select a case...</option>
+                </select>
+                <button id="add-new-case-button" class="btn btn-primary">Add New</button>
+                <button id="edit-child-button" class="btn btn-secondary disabled" disabled>Edit Child</button>
+            </div>
+
+            <div id="new-case-form" class="new-case-form">
+                <input type="text" id="first-name" placeholder="First Name">
+                <input type="text" id="last-name" placeholder="Last Name">
+                <input type="text" id="cross-streets" placeholder="Cross Streets (e.g., Oak St & Maple Ave)">
+                <input type="text" id="address" placeholder="Address">
+                <input type="text" id="city" placeholder="City">
+                <input type="text" id="state" placeholder="State">
+                <input type="text" id="zip" placeholder="Zip">
+                <input type="text" id="id-number" placeholder="ID Number">
+                <button id="save-new-case-button" class="btn btn-success">Save Child</button>
+            </div>
+
+            <div class="schedule-container">
+                <h3>Case Schedule - <span id="edit-booking-schedule-title">Select a Case</span></h3>
+                <div class="schedule-controls">
+                    <label><input type="checkbox" id="toggle-compact-edit"> Compact</label>
+                    <label>Increment:
+                        <select id="increment-edit">
+                            <option value="15" selected>15 min</option>
+                            <option value="30">30 min</option>
+                            <option value="60">60 min</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="schedule-legend" id="cases-legend"></div>
+                <div id="edit-booking-schedule-grid" class="schedule-grid">
+                    <div class="grid-header">Time</div>
+                    <div class="grid-header">Sunday</div>
+                    <div class="grid-header">Monday</div>
+                    <div class="grid-header">Tuesday</div>
+                    <div class="grid-header">Wednesday</div>
+                    <div class="grid-header">Thursday</div>
+                    <div class="grid-header">Friday</div>
+                    <div class="grid-header">Saturday</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vanilla JS (no modules) - load in dependency order -->
+    <script defer src="src/js/utils/time.js"></script>
+    <script defer src="src/js/state/store.js"></script>
+    <script defer src="src/js/ui/scheduleGrid.js"></script>
+    <script defer src="src/js/ui/scheduleRender.js"></script>
+    <script defer src="src/js/app.js"></script>
+
+</body>
+</html>

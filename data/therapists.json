@@ -1,0 +1,214 @@
+{
+  "therapists": [
+    {
+      "id": "anya",
+      "firstName": "Anya",
+      "lastName": "Sharma",
+      "phone": "(555) 123-4567",
+      "email": "anya.s@example.com",
+      "cases": [
+        {
+          "id": "anya-case1",
+          "name": "Kid A",
+          "patientId": "001A",
+          "crossStreets": "Sutphin Boulevard & 94th Avenue",
+          "city": "Jamaica",
+          "state": "NY",
+          "zip": "11435",
+          "schedule": [],
+          "colorIndex": 0
+        },
+        {
+          "id": "anya-case2",
+          "name": "Kid B",
+          "patientId": "001B",
+          "crossStreets": "41st Avenue & Vernon Boulevard",
+          "city": "Queens",
+          "state": "NY",
+          "zip": "11101",
+          "schedule": [],
+          "colorIndex": 1
+        },
+        {
+          "id": "anya-case3",
+          "name": "Kid C",
+          "patientId": "001C",
+          "crossStreets": "30th Avenue & 21st Street",
+          "city": "Astoria",
+          "state": "NY",
+          "zip": "11105",
+          "schedule": [],
+          "colorIndex": 2
+        }
+      ]
+    },
+    {
+      "id": "liam",
+      "firstName": "Liam",
+      "lastName": "Miller",
+      "phone": "(555) 987-6543",
+      "email": "liam.m@example.com",
+      "cases": [
+        {
+          "id": "liam-case1",
+          "name": "Kid D",
+          "patientId": "002A",
+          "crossStreets": "Hillside Avenue & 186th Street",
+          "city": "Hollis",
+          "state": "NY",
+          "zip": "11423",
+          "schedule": [],
+          "colorIndex": 0
+        },
+        {
+          "id": "liam-case2",
+          "name": "Kid E",
+          "patientId": "002B",
+          "crossStreets": "Main Street & 58th Avenue",
+          "city": "Flushing",
+          "state": "NY",
+          "zip": "11355",
+          "schedule": [],
+          "colorIndex": 1
+        },
+        {
+          "id": "liam-case3",
+          "name": "Kid F",
+          "patientId": "002C",
+          "crossStreets": "Grand Street & Metropolitan Avenue",
+          "city": "Maspeth",
+          "state": "NY",
+          "zip": "11378",
+          "schedule": [],
+          "colorIndex": 2
+        }
+      ]
+    },
+    {
+      "id": "olivia",
+      "firstName": "Olivia",
+      "lastName": "Davis",
+      "phone": "(555) 234-5678",
+      "email": "olivia.d@example.com",
+      "cases": [
+        {
+          "id": "olivia-case1",
+          "name": "Kid G",
+          "patientId": "003A",
+          "crossStreets": "Queens Boulevard & 74th Street",
+          "city": "Elmhurst",
+          "state": "NY",
+          "zip": "11373",
+          "schedule": [],
+          "colorIndex": 0
+        },
+        {
+          "id": "olivia-case2",
+          "name": "Kid H",
+          "patientId": "003B",
+          "crossStreets": "Jamaica Avenue & 114th Street",
+          "city": "Richmond Hill",
+          "state": "NY",
+          "zip": "11418",
+          "schedule": [],
+          "colorIndex": 1
+        },
+        {
+          "id": "olivia-case3",
+          "name": "Kid I",
+          "patientId": "003C",
+          "crossStreets": "Rockaway Boulevard & 132nd Street",
+          "city": "South Ozone Park",
+          "state": "NY",
+          "zip": "11420",
+          "schedule": [],
+          "colorIndex": 2
+        }
+      ]
+    },
+    {
+      "id": "noah",
+      "firstName": "Noah",
+      "lastName": "Wilson",
+      "phone": "(555) 345-6789",
+      "email": "noah.w@example.com",
+      "cases": [
+        {
+          "id": "noah-case1",
+          "name": "Kid J",
+          "patientId": "004A",
+          "crossStreets": "Woodhaven Boulevard & 86th Avenue",
+          "city": "Woodhaven",
+          "state": "NY",
+          "zip": "11421",
+          "schedule": [],
+          "colorIndex": 0
+        },
+        {
+          "id": "noah-case2",
+          "name": "Kid K",
+          "patientId": "004B",
+          "crossStreets": "Kissena Boulevard & 45th Avenue",
+          "city": "Flushing",
+          "state": "NY",
+          "zip": "11355",
+          "schedule": [],
+          "colorIndex": 1
+        },
+        {
+          "id": "noah-case3",
+          "name": "Kid L",
+          "patientId": "004C",
+          "crossStreets": "Utopia Parkway & 168th Street",
+          "city": "Flushing",
+          "state": "NY",
+          "zip": "11358",
+          "schedule": [],
+          "colorIndex": 2
+        }
+      ]
+    },
+    {
+      "id": "emma",
+      "firstName": "Emma",
+      "lastName": "Taylor",
+      "phone": "(555) 456-7890",
+      "email": "emma.t@example.com",
+      "cases": [
+        {
+          "id": "emma-case1",
+          "name": "Kid M",
+          "patientId": "005A",
+          "crossStreets": "Cross Bay Boulevard & 157th Avenue",
+          "city": "Howard Beach",
+          "state": "NY",
+          "zip": "11414",
+          "schedule": [],
+          "colorIndex": 0
+        },
+        {
+          "id": "emma-case2",
+          "name": "Kid N",
+          "patientId": "005B",
+          "crossStreets": "Francis Lewis Boulevard & 212th Street",
+          "city": "Bayside",
+          "state": "NY",
+          "zip": "11361",
+          "schedule": [],
+          "colorIndex": 1
+        },
+        {
+          "id": "emma-case3",
+          "name": "Kid O",
+          "patientId": "005C",
+          "crossStreets": "Union Turnpike & 195th Street",
+          "city": "Fresh Meadows",
+          "state": "NY",
+          "zip": "11366",
+          "schedule": [],
+          "colorIndex": 2
+        }
+      ]
+    }
+  ]
+}
