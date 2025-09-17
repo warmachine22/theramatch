@@ -32,6 +32,17 @@
       }
     })();
     let therapists = Store.getTherapists();
+    // One-time migration: set requiredHours = 25 for all therapists, then stop enforcing
+    (function migrateRequiredHours25() {
+      const TAG = 'required-hours-25';
+      try {
+        if (localStorage.getItem('tms_migration_tag') === TAG) return;
+        therapists = Store.setTherapists((prev) => prev.map((t) => ({ ...t, requiredHours: 25 })));
+        localStorage.setItem('tms_migration_tag', TAG);
+      } catch (e) {
+        console.warn('Migration failed:', e);
+      }
+    })();
     let currentSelectedTherapist = null;
 
     // DOM refs
@@ -1306,6 +1317,7 @@
           lastName: def.t.lastName,
           phone: def.t.phone,
           email: def.t.email,
+          requiredHours: 25,
           boroughPrefs: ['Queens'],
           cases: [{
             id: def.c.id,
