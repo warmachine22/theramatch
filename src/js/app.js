@@ -13,36 +13,16 @@
       tabs.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabId));
       tabContents.forEach((content) => content.classList.toggle('active', content.id === tabId));
     };
-    tabs.forEach((button) => button.addEventListener('click', () => { cleanupNewReferralDraft(); activateTab(button.dataset.tab); }));
+    tabs.forEach((button) => button.addEventListener('click', () => { TMS.Referrals.cleanupDraft(); activateTab(button.dataset.tab); }));
 
     // State bootstrap
     Store.initState();
-    // One-time seed: Queens-focused dataset (overrides any previous demo data)
-    (function seedQueens() {
-      const TAG = 'queens-v1';
-      try {
-        if (localStorage.getItem('tms_seed_tag') === TAG) return;
-        const dataset = buildQueensDataset();
-        if (dataset && Array.isArray(dataset.therapists) && Array.isArray(dataset.referrals)) {
-          Store.importJSON(dataset);
-          localStorage.setItem('tms_seed_tag', TAG);
-        }
-      } catch (e) {
-        console.warn('Seed failed:', e);
-      }
-    })();
+    // One-time seed (delegated to TMS.Seed)
+    TMS.Seed.applySeedQueens(Store);
     let therapists = Store.getTherapists();
-    // One-time migration: set requiredHours = 25 for all therapists, then stop enforcing
-    (function migrateRequiredHours25() {
-      const TAG = 'required-hours-25';
-      try {
-        if (localStorage.getItem('tms_migration_tag') === TAG) return;
-        therapists = Store.setTherapists((prev) => prev.map((t) => ({ ...t, requiredHours: 25 })));
-        localStorage.setItem('tms_migration_tag', TAG);
-      } catch (e) {
-        console.warn('Migration failed:', e);
-      }
-    })();
+    // One-time migration (delegated to TMS.Seed)
+    TMS.Seed.applyRequiredHoursMigration(Store);
+    therapists = Store.getTherapists();
     let currentSelectedTherapist = null;
 
     // DOM refs
@@ -114,17 +94,8 @@
     const referralChildrenDatalist = document.getElementById('referral-children-list');
     const referralOptionMap = new Map();
 
-    // Remove any unsaved draft (new referral) rows from the Referrals table
-    const cleanupNewReferralDraft = () => {
-      if (!referralsListBody) return;
-      referralsListBody.querySelectorAll('tr.new-referral-row').forEach((draftRow) => {
-        const next = draftRow.nextElementSibling;
-        try { referralsListBody.removeChild(draftRow); } catch (e) {}
-        if (next && next.classList.contains('referral-edit-row')) {
-          try { referralsListBody.removeChild(next); } catch (e) {}
-        }
-      });
-    };
+    // Remove any unsaved draft rows (delegated to TMS.Referrals)
+    const cleanupNewReferralDraft = TMS.Referrals.cleanupDraft;
     // Flag: if user edits max/day manually, stop auto-defaulting
     let maxPerDayDirty = false;
 
@@ -1254,8 +1225,8 @@
       zipInput.value = clientCase.zip || '';
     };
 
-    // Helper to slugify IDs
-    const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 50);
+    // Helper to slugify IDs (delegated)
+    const slugify = TMS.String.slugify;
 
     // Build the Queens-focused dataset (5 staffed therapists + 3 unstaffed referrals)
     function buildQueensDataset() {
@@ -2359,13 +2330,14 @@
     }
 
     // Init
+    TMS.Referrals.init();
     populateTherapistSelectDropdown();
     populateTherapistList();
     buildSearchTherapistOptions();
     renderSearchLegendForTherapist(null);
     renderReferralsList();
-    buildReferralChildDatalist();
-    buildReferralAssignOptions();
+    TMS.Referrals.buildChildDatalist();
+    TMS.Referrals.buildAssignOptions();
     // Build grids first, then render
     Grid.generateTimeSlots(editBookingScheduleGrid, getEditInc(), {
       onMouseDown: handleEditMouseDown,
