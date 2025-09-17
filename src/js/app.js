@@ -13,7 +13,7 @@
       tabs.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabId));
       tabContents.forEach((content) => content.classList.toggle('active', content.id === tabId));
     };
-    tabs.forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+    tabs.forEach((button) => button.addEventListener('click', () => { cleanupNewReferralDraft(); activateTab(button.dataset.tab); }));
 
     // State bootstrap
     Store.initState();
@@ -78,19 +78,23 @@
     const searchTotalHoursInput = document.getElementById('search-total-hours');
     const searchMaxPerDayInput = document.getElementById('search-max-per-day');
     const searchStatusSelect = document.getElementById('search-status');
-    const saveReferralButton = document.getElementById('save-referral-button');
     // Referrals tab
     const addNewReferralButton = document.getElementById('add-new-referral-button');
     const referralsListBody = document.getElementById('referrals-list-body');
+
+    // Remove any unsaved draft (new referral) rows from the Referrals table
+    const cleanupNewReferralDraft = () => {
+      if (!referralsListBody) return;
+      referralsListBody.querySelectorAll('tr.new-referral-row').forEach((draftRow) => {
+        const next = draftRow.nextElementSibling;
+        try { referralsListBody.removeChild(draftRow); } catch (e) {}
+        if (next && next.classList.contains('referral-edit-row')) {
+          try { referralsListBody.removeChild(next); } catch (e) {}
+        }
+      });
+    };
     // Flag: if user edits max/day manually, stop auto-defaulting
     let maxPerDayDirty = false;
-    // Edit-mode for referrals: when set, Save updates existing instead of creating a new one
-    let currentReferralEditingId = null;
-
-    const resetReferralEditMode = () => {
-      currentReferralEditingId = null;
-      if (saveReferralButton) saveReferralButton.textContent = 'Save Referral';
-    };
 
     // Helpers
     const setCompactMode = (on) => {
@@ -520,9 +524,6 @@
 
     const loadReferralToSearch = (ref) => {
       if (!ref) return;
-      // Enter edit mode for this referral
-      currentReferralEditingId = ref.id;
-      if (saveReferralButton) saveReferralButton.textContent = 'Update Referral';
 
       // Fill form fields
       if (searchChildNameInput) searchChildNameInput.value = ref.childName || '';
@@ -554,6 +555,9 @@
       const openClass = 'referral-edit-row';
 
       list.forEach((r) => {
+        // Before wiring each existing row, ensure no leftover draft row remains
+        cleanupNewReferralDraft();
+
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${r.childName || ''}</td>
@@ -791,6 +795,7 @@
         }
 
         viewBtn.addEventListener('click', () => {
+          cleanupNewReferralDraft();
           const isOpen = editRow.style.display === 'table-row';
           // close others
           referralsListBody.querySelectorAll(`tr.${openClass}`).forEach((e) => (e.style.display = 'none'));
@@ -804,11 +809,13 @@
         });
 
         findBtn.addEventListener('click', () => {
+          cleanupNewReferralDraft();
           const current = TMS.Store.findReferral(r.id);
           loadReferralToSearch(current || r);
         });
 
         delBtn.addEventListener('click', () => {
+          cleanupNewReferralDraft();
           if (!confirm('Delete this referral?')) return;
           TMS.Store.deleteReferral(r.id);
           renderReferralsList();
@@ -845,6 +852,9 @@
     // Inline "Add New Referral" creation on Referrals tab
     const addNewReferralInline = () => {
       if (!referralsListBody) return;
+
+      // Remove any existing unsaved draft first
+      cleanupNewReferralDraft();
 
       // Close any open inline editors
       referralsListBody.querySelectorAll('tr.referral-edit-row').forEach((e) => (e.style.display = 'none'));
@@ -896,6 +906,7 @@
                 </select>
               </label>
               <button class="btn btn-success ref-save">Save</button>
+              <button class="btn btn-secondary ref-cancel">Cancel</button>
             </div>
             <div class="schedule-grid mini-schedule ref-mini-grid">
               <div class="grid-header">Time</div>
@@ -908,9 +919,7 @@
               <div class="grid-header">Saturday</div>
             </div>
 
-            <div class="form-actions">
-              <button class="btn btn-secondary ref-cancel">Cancel</button>
-            </div>
+            
           </div>
         </td>
       `;
@@ -1129,89 +1138,6 @@
       });
     };
 
-    const handleSaveReferral = () => {
-      const childName = (searchChildNameInput && searchChildNameInput.value || '').trim();
-      const childId = (searchChildIdInput && searchChildIdInput.value || '').trim();
-      if (!childName || !childId) {
-        alert('Please enter Child Name and Child ID.');
-        return;
-      }
-      const totalHrs = Number((searchTotalHoursInput && searchTotalHoursInput.value) || 0);
-      const maxDay = Number((searchMaxPerDayInput && searchMaxPerDayInput.value) || defaultMaxPerDayFromTotal(totalHrs));
-      const status = (searchStatusSelect && searchStatusSelect.value) || 'referred';
-
-      const cross = (document.getElementById('search-cross-streets') && document.getElementById('search-cross-streets').value || '').trim();
-      const city = (document.getElementById('search-city') && document.getElementById('search-city').value || '').trim();
-      const state = (document.getElementById('search-state') && document.getElementById('search-state').value || '').trim();
-      const zip = (document.getElementById('search-zip') && document.getElementById('search-zip').value || '').trim();
-
-      const availability = sortSlotIds(Array.from(searchSelectedSlots));
- 
-      // Build payload (only child/address/status + availability; no therapist saved)
-      const payload = {
-        childName,
-        childId,
-        totalReferredHours: roundToQuarter(totalHrs),
-        maxDesiredPerDay: roundToQuarter(maxDay),
-        status,
-        crossStreets: cross,
-        city, state, zip,
-        availability
-      };
-
-      // If not editing and Child ID already exists, load existing instead of creating duplicate
-      const existingById = TMS.Store.findReferralByChildId(childId);
-      if (!currentReferralEditingId && existingById) {
-        alert('A referral already exists for this Child ID. Loading it so you can review or update.');
-        loadReferralToSearch(existingById);
-        return;
-      }
- 
-      if (currentReferralEditingId) {
-        // Update existing referral (avoid duplicate creation)
-        try {
-          TMS.Store.updateReferral(currentReferralEditingId, payload);
-          renderReferralsList();
-          alert('Referral updated.');
-          resetReferralEditMode();
-          clearTherapistSelectionOnSearch();
-        } catch (e) {
-          if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
-            alert('Another referral already exists with this Child ID. Please change the Child ID or edit the existing referral.');
-          } else {
-            console.error('Update referral failed:', e);
-            alert('Failed to update referral.');
-          }
-          return;
-        }
-      } else {
-        // Create new referral
-        try {
-          const baseId = slugify(`${childName}-${childId}`);
-          const uniqueId = `${baseId}-${Date.now()}`;
-          const ref = { id: uniqueId, ...payload };
-          TMS.Store.addReferral(ref);
-          renderReferralsList();
-          alert('Referral saved.');
-          clearTherapistSelectionOnSearch();
-        } catch (e) {
-          if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
-            // Race-safety: if duplicate detected by store, load existing instead
-            const exist = TMS.Store.findReferralByChildId(childId);
-            if (exist) {
-              alert('A referral already exists for this Child ID. Loading it so you can review or update.');
-              loadReferralToSearch(exist);
-            } else {
-              alert('A referral with this Child ID already exists.');
-            }
-          } else {
-            console.error('Save referral failed:', e);
-            alert('Failed to save referral.');
-          }
-          return;
-        }
-      }
-    };
 
     const clearCaseForm = () => {
       firstNameInput.value = '';
@@ -1956,10 +1882,7 @@
     if (searchMaxPerDayInput) {
       searchMaxPerDayInput.addEventListener('input', () => { maxPerDayDirty = true; });
     }
-    // Save referral
-    if (saveReferralButton) {
-      saveReferralButton.addEventListener('click', handleSaveReferral);
-    }
+    // Save referral (removed)
     if (addNewReferralButton) {
       addNewReferralButton.addEventListener('click', addNewReferralInline);
     }
