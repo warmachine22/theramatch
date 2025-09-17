@@ -147,33 +147,9 @@
     };
 
     // Helpers for Search filters/dropdown
-    const getActiveSearchBoroughs = () => {
-      if (!searchBoroughFilterGroup) return [];
-      return Array.from(searchBoroughFilterGroup.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value);
-    };
+    const getActiveSearchBoroughs = TMS.Search.getActiveSearchBoroughs;
 
-    const buildSearchTherapistOptions = () => {
-      if (!searchTherapistSelect) return;
-      const boroughs = getActiveSearchBoroughs();
-      const requiredHoursStr = (searchRequiredHoursInput && searchRequiredHoursInput.value || '').trim();
-      const requiredHours = requiredHoursStr === '' ? null : Number(requiredHoursStr);
-      // Clear current options
-      searchTherapistSelect.innerHTML = '<option value="">Select Therapist...</option>';
-      let list = therapists;
-      if (boroughs.length > 0) {
-        list = list.filter((t) => (t.boroughPrefs || []).some((b) => boroughs.includes(b)));
-      }
-      if (requiredHours !== null && !Number.isNaN(requiredHours)) {
-        list = list.filter((t) => (t.totalHours ?? 0) <= requiredHours);
-      }
-      const sorted = [...list].sort((a, b) => (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`));
-      sorted.forEach((t) => {
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = `Dr. ${t.firstName} ${t.lastName} (${t.totalHours ?? 0}h)`;
-        searchTherapistSelect.appendChild(opt);
-      });
-    };
+    const buildSearchTherapistOptions = TMS.Search.buildSearchTherapistOptions;
 
     const getTherapistScheduleSet = TMS.ScheduleUtils.getTherapistScheduleSet;
 
