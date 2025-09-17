@@ -397,6 +397,50 @@ h1, h2, h3 {
     border: 1px solid rgba(0,0,0,0.1);
 }
 
+/* Referral inline editor styles */
+.referral-edit-panel {
+    padding: 12px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    background: #fafafa;
+}
+.referral-edit-panel .form-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.referral-edit-panel input[type="text"],
+.referral-edit-panel input[type="number"],
+.referral-edit-panel select {
+    padding: 6px 8px;
+    height: 32px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 14px;
+}
+.referral-edit-panel .form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.mini-schedule-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+/* Compact schedule grid for preferred time selection */
+.schedule-grid.mini-schedule {
+    --slot-h: 12px;      /* smaller cell height */
+    --grid-gap: 1px;
+    --slot-font: 10px;
+    --label-font: 9px;
+    margin-top: 6px;
+}
+
 /* Therapist List */
 .therapist-list {
     margin-top: 20px;

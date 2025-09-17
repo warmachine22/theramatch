@@ -13,16 +13,38 @@
             <button class="tab-button active" data-tab="search">Search</button>
             <button class="tab-button" data-tab="add-therapist">Add Therapist</button>
             <button class="tab-button" data-tab="edit-booking">Edit Booking</button>
+            <button class="tab-button" data-tab="referrals">Referrals</button>
         </div>
 
+        <!-- SEARCH TAB -->
         <div id="search" class="tab-content active">
             <h2>Search Schedule by Location</h2>
             <div class="search-form">
+                <!-- Child & referral info -->
+                <input type="text" id="search-child-name" placeholder="Child Name">
+                <input type="text" id="search-child-id" placeholder="Child ID Number">
+                <div class="form-field">
+                    <label>Total Referred Hours and Max Desired Hours/Day</label>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <input type="number" id="search-total-hours" placeholder="Total Referred Hours (e.g., 20)" min="0" step="0.25">
+                        <input type="number" id="search-max-per-day" placeholder="Max Desired Hours/Day (auto = total/5)" min="0" step="0.25">
+                        <select id="search-status">
+                            <option value="referred" selected>Referred</option>
+                            <option value="staffed">Staffed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Address/location -->
                 <input type="text" id="search-cross-streets" placeholder="Cross Streets (e.g., Oak St & Maple Ave)">
                 <input type="text" id="search-city" placeholder="City">
                 <input type="text" id="search-state" placeholder="State">
                 <input type="text" id="search-zip" placeholder="Zip">
-                <button id="search-button" class="btn btn-primary">Search</button>
+
+                <div style="display:flex; gap:10px;">
+                    <button id="search-button" class="btn btn-primary">Search</button>
+                    <button id="save-referral-button" class="btn btn-success">Save Referral</button>
+                </div>
             </div>
 
             <!-- New Therapist/Filter controls -->
@@ -84,11 +106,34 @@
             
             <div id="search-results-section" style="margin-top: 20px;">
                 <h3>Search Results</h3>
-                <ul id="search-results-list">
-                    </ul>
+                <ul id="search-results-list"></ul>
             </div>
         </div>
 
+        <!-- REFERRALS TAB -->
+        <div id="referrals" class="tab-content">
+            <h2>Referrals</h2>
+            <div class="data-controls">
+                <button id="add-new-referral-button" class="btn btn-primary">Add New Referral</button>
+            </div>
+            <div class="therapist-list">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Child Name</th>
+                            <th>Child ID</th>
+                            <th>Total Hrs</th>
+                            <th>Max/Day</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="referrals-list-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ADD THERAPIST TAB -->
         <div id="add-therapist" class="tab-content">
             <h2>Manage Therapists</h2>
             <button id="add-new-therapist-button" class="btn btn-primary">Add New Therapist</button>
@@ -141,12 +186,12 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="therapist-list-body">
-                        </tbody>
+                    <tbody id="therapist-list-body"></tbody>
                 </table>
             </div>
         </div>
 
+        <!-- EDIT BOOKING TAB -->
         <div id="edit-booking" class="tab-content">
             <div class="therapist-header">
                 <h2>Therapist Schedule Editor</h2>

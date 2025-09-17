@@ -72,6 +72,9 @@
     }
   ];
 
+  // --- Referrals state ---
+  let referrals = [];
+
   // --- Demo schedule generation (15-minute base) ---
   function generateRealisticSchedule(caseScheduleArray, weeklyHoursOptions, dailyBlockOptions) {
     caseScheduleArray.length = 0;
@@ -138,7 +141,7 @@
 
   function saveState() {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ therapists }));
+      localStorage.setItem(LS_KEY, JSON.stringify({ therapists, referrals }));
     } catch (e) {
       console.warn('Save failed:', e);
     }
@@ -152,6 +155,7 @@
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.therapists)) return false;
       therapists = parsed.therapists;
+      referrals = Array.isArray(parsed.referrals) ? parsed.referrals : [];
       hydrateTotals();
       return true;
     } catch (e) {
@@ -183,7 +187,7 @@
   }
   Store.setTherapists = setTherapists;
 
-  function exportJSON() { return JSON.stringify({ therapists }, null, 2); }
+  function exportJSON() { return JSON.stringify({ therapists, referrals }, null, 2); }
   Store.exportJSON = exportJSON;
 
   function importJSON(obj) {
@@ -191,6 +195,7 @@
       throw new Error('Invalid data format. Expected an object with a "therapists" array.');
     }
     therapists = obj.therapists;
+    referrals = Array.isArray(obj.referrals) ? obj.referrals : [];
     hydrateTotals();
     saveState();
   }
@@ -203,5 +208,62 @@
     return fname;
   }
   Store.timestampedFilename = timestampedFilename;
+
+  // --- Referrals API ---
+  function getReferrals() { return referrals; }
+  Store.getReferrals = getReferrals;
+
+  function addReferral(ref) {
+    // Enforce unique Child ID (case-insensitive)
+    const norm = String((ref && ref.childId) || '').trim().toLowerCase();
+    if (norm && referrals.some((r) => String((r.childId || '')).trim().toLowerCase() === norm)) {
+      const err = new Error('DUPLICATE_CHILD_ID');
+      err.code = 'DUPLICATE_CHILD_ID';
+      throw err;
+    }
+    const now = Date.now();
+    const withMeta = { ...ref, createdAt: now, updatedAt: now };
+    referrals = [withMeta, ...referrals];
+    saveState();
+    return referrals;
+  }
+  Store.addReferral = addReferral;
+
+  function updateReferral(id, patch) {
+    const now = Date.now();
+    const current = referrals.find((r) => r.id === id);
+    if (!current) return referrals;
+    const nextChildId = patch.hasOwnProperty('childId') ? patch.childId : current.childId;
+    const norm = String(nextChildId || '').trim().toLowerCase();
+    if (norm && referrals.some((r) => r.id !== id && String((r.childId || '')).trim().toLowerCase() === norm)) {
+      const err = new Error('DUPLICATE_CHILD_ID');
+      err.code = 'DUPLICATE_CHILD_ID';
+      throw err;
+    }
+    referrals = referrals.map((r) => r.id === id ? { ...r, ...patch, updatedAt: now } : r);
+    saveState();
+    return referrals;
+  }
+  Store.updateReferral = updateReferral;
+
+  function deleteReferral(id) {
+    referrals = referrals.filter((r) => r.id !== id);
+    saveState();
+    return referrals;
+  }
+  Store.deleteReferral = deleteReferral;
+
+  function findReferral(id) {
+    return referrals.find((r) => r.id === id);
+  }
+  Store.findReferral = findReferral;
+
+  // Find referral by Child ID (case-insensitive)
+  function findReferralByChildId(childId) {
+    const norm = String(childId || '').trim().toLowerCase();
+    if (!norm) return undefined;
+    return referrals.find((r) => String((r.childId || '')).trim().toLowerCase() === norm);
+  }
+  Store.findReferralByChildId = findReferralByChildId;
 
 })(window);

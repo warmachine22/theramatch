@@ -72,6 +72,25 @@
     const searchCurrentHoursInput = document.getElementById('search-current-hours');
     const searchCasesLegend = document.getElementById('search-cases-legend');
     const searchBreakMinsInput = document.getElementById('search-break-mins');
+    // Referral entry fields
+    const searchChildNameInput = document.getElementById('search-child-name');
+    const searchChildIdInput = document.getElementById('search-child-id');
+    const searchTotalHoursInput = document.getElementById('search-total-hours');
+    const searchMaxPerDayInput = document.getElementById('search-max-per-day');
+    const searchStatusSelect = document.getElementById('search-status');
+    const saveReferralButton = document.getElementById('save-referral-button');
+    // Referrals tab
+    const addNewReferralButton = document.getElementById('add-new-referral-button');
+    const referralsListBody = document.getElementById('referrals-list-body');
+    // Flag: if user edits max/day manually, stop auto-defaulting
+    let maxPerDayDirty = false;
+    // Edit-mode for referrals: when set, Save updates existing instead of creating a new one
+    let currentReferralEditingId = null;
+
+    const resetReferralEditMode = () => {
+      currentReferralEditingId = null;
+      if (saveReferralButton) saveReferralButton.textContent = 'Save Referral';
+    };
 
     // Helpers
     const setCompactMode = (on) => {
@@ -470,6 +489,728 @@
         return;
       }
       Render.renderLegend(searchCasesLegend, therapist.cases || []);
+    };
+ 
+    // Clear any therapist selection/overlays on Search (ensure no association is implied/saved)
+    const clearTherapistSelectionOnSearch = () => {
+      if (searchTherapistSelect) searchTherapistSelect.value = '';
+      clearTherapistBusyOverlay();
+      clearSearchCaseOverlay();
+      renderSearchLegendForTherapist(null);
+    };
+ 
+    // ---------- Referrals: helpers & UI ----------
+    const roundToQuarter = (hrs) => {
+      const n = Number(hrs);
+      if (Number.isNaN(n)) return 0;
+      return Math.round(n * 4) / 4;
+    };
+    const defaultMaxPerDayFromTotal = (total) => roundToQuarter((Number(total) || 0) / 5);
+
+    const sortSlotIds = (arr) => {
+      return [...arr].sort((a, b) => {
+        const [da, ta] = a.split('-'); const [db, tb] = b.split('-');
+        const [ah, am] = ta.split(':').map(Number); const [bh, bm] = tb.split(':').map(Number);
+        const ad = parseInt(da, 10), bd = parseInt(db, 10);
+        if (ad !== bd) return ad - bd;
+        if (ah !== bh) return ah - bh;
+        return am - bm;
+      });
+    };
+
+    const loadReferralToSearch = (ref) => {
+      if (!ref) return;
+      // Enter edit mode for this referral
+      currentReferralEditingId = ref.id;
+      if (saveReferralButton) saveReferralButton.textContent = 'Update Referral';
+
+      // Fill form fields
+      if (searchChildNameInput) searchChildNameInput.value = ref.childName || '';
+      if (searchChildIdInput) searchChildIdInput.value = ref.childId || '';
+      if (searchTotalHoursInput) searchTotalHoursInput.value = ref.totalReferredHours ?? '';
+      if (searchMaxPerDayInput) { searchMaxPerDayInput.value = ref.maxDesiredPerDay ?? ''; maxPerDayDirty = true; }
+      if (searchStatusSelect) searchStatusSelect.value = ref.status || 'referred';
+      // Address
+      const cs = document.getElementById('search-cross-streets');
+      const city = document.getElementById('search-city');
+      const st = document.getElementById('search-state');
+      const zip = document.getElementById('search-zip');
+      if (cs) cs.value = ref.crossStreets || '';
+      if (city) city.value = ref.city || '';
+      if (st) st.value = ref.state || '';
+      if (zip) zip.value = ref.zip || '';
+
+      // Apply availability (15-min slots) – only blue selection (no therapist data)
+      searchSelectedSlots = new Set(ref.availability || []);
+      renderSearchSelection();
+      // Activate Search tab
+      typeof activateTab === 'function' && activateTab('search');
+    };
+
+    const renderReferralsList = () => {
+      if (!referralsListBody) return;
+      const list = TMS.Store.getReferrals();
+      referralsListBody.innerHTML = '';
+      const openClass = 'referral-edit-row';
+
+      list.forEach((r) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${r.childName || ''}</td>
+          <td>${r.childId || ''}</td>
+          <td>${r.totalReferredHours ?? 0}</td>
+          <td>${r.maxDesiredPerDay ?? 0}</td>
+          <td>${r.status || 'referred'}</td>
+          <td>
+            <button class="view-edit-ref btn btn-secondary" data-id="${r.id}">View/Edit</button>
+            <button class="find-therapist-ref btn btn-primary" data-id="${r.id}">Find Therapist</button>
+            <button class="delete-ref btn btn-outline" data-id="${r.id}">Delete</button>
+          </td>
+        `;
+        referralsListBody.appendChild(row);
+
+        const editRow = document.createElement('tr');
+        editRow.className = openClass;
+        editRow.style.display = 'none';
+        editRow.innerHTML = `
+          <td colspan="6">
+            <div class="inline-edit-form referral-edit-panel">
+              <div class="form-row">
+                <input type="text" class="ref-edit-name" value="${r.childName || ''}" placeholder="Child Name">
+                <input type="text" class="ref-edit-id" value="${r.childId || ''}" placeholder="Child ID">
+              </div>
+              <div class="form-row">
+                <input type="number" class="ref-edit-total" value="${r.totalReferredHours ?? 0}" step="0.25" placeholder="Total Hours">
+                <input type="number" class="ref-edit-maxday" value="${r.maxDesiredPerDay ?? 0}" step="0.25" placeholder="Max/Day">
+                <select class="ref-edit-status">
+                  <option value="referred" ${r.status === 'referred' ? 'selected' : ''}>Referred</option>
+                  <option value="staffed" ${r.status === 'staffed' ? 'selected' : ''}>Staffed</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <input type="text" class="ref-edit-cross" value="${r.crossStreets || ''}" placeholder="Cross Streets">
+                <input type="text" class="ref-edit-city" value="${r.city || ''}" placeholder="City">
+                <input type="text" class="ref-edit-state" value="${r.state || ''}" placeholder="State">
+                <input type="text" class="ref-edit-zip" value="${r.zip || ''}" placeholder="Zip">
+              </div>
+
+              <div class="mini-schedule-controls">
+                <label>Preferred Time - Increment:
+                  <select class="ref-inc">
+                    <option value="15" selected>15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">60 min</option>
+                  </select>
+                </label>
+                <button class="btn btn-success ref-save" data-id="${r.id}">Save</button>
+              </div>
+              <div class="schedule-grid mini-schedule ref-mini-grid">
+                <div class="grid-header">Time</div>
+                <div class="grid-header">Sunday</div>
+                <div class="grid-header">Monday</div>
+                <div class="grid-header">Tuesday</div>
+                <div class="grid-header">Wednesday</div>
+                <div class="grid-header">Thursday</div>
+                <div class="grid-header">Friday</div>
+                <div class="grid-header">Saturday</div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-secondary ref-cancel">Cancel</button>
+              </div>
+            </div>
+          </td>
+        `;
+        referralsListBody.appendChild(editRow);
+
+        // Mini schedule (Preferred time) setup for this row
+        let refMiniInitialized = false;
+        let prefSelectedSlots = new Set(r.preferredAvailability || []);
+        let isRefDragging = false;
+        let refStartSlot = null;
+
+        const ensureMiniScheduleInitialized = () => {
+          if (refMiniInitialized) return;
+          refMiniInitialized = true;
+
+          const incSelect = editRow.querySelector('.ref-inc');
+          const miniGrid = editRow.querySelector('.ref-mini-grid');
+          if (!incSelect || !miniGrid) return;
+
+          const getInc = () => {
+            const v = parseInt(incSelect.value || '15', 10);
+            return [15, 30, 60].includes(v) ? v : 15;
+          };
+
+          const clearRefHighlights = () => {
+            miniGrid.querySelectorAll('.dragging-highlight').forEach((s) => s.classList.remove('dragging-highlight'));
+          };
+
+          const highlightRefSlots = (start, end) => {
+            const startDay = parseInt(start.dataset.day);
+            const shsm = start.dataset.time.split(':');
+            const endDay = parseInt(end.dataset.day);
+            const ehEm = end.dataset.time.split(':');
+            const sh = parseInt(shsm[0], 10), sm = parseInt(shsm[1], 10);
+            const eh = parseInt(ehEm[0], 10), em = parseInt(ehEm[1], 10);
+            const startTotal = sh * 60 + sm;
+            const endTotal = eh * 60 + em;
+            const dayRange = [Math.min(startDay, endDay), Math.max(startDay, endDay)];
+            const timeRange = [Math.min(startTotal, endTotal), Math.max(startTotal, endTotal)];
+            miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+              const d = parseInt(cell.dataset.day);
+              const hm = cell.dataset.time.split(':');
+              const h = parseInt(hm[0], 10), m = parseInt(hm[1], 10);
+              const t = h * 60 + m;
+              if (d >= dayRange[0] && d <= dayRange[1] && t >= timeRange[0] && t <= timeRange[1]) {
+                cell.classList.add('dragging-highlight');
+              }
+            });
+          };
+
+          const applyRefToggleForDisplaySlot = (slotEl) => {
+            const inc = getInc();
+            const day = slotEl.dataset.day;
+            const displayTime = slotEl.dataset.time;
+            const subTimes = Time.blockSubslots15(displayTime, inc);
+            const subSlotIds = subTimes.map((t) => `${day}-${t}`);
+            const allPresent = subSlotIds.every((id) => prefSelectedSlots.has(id));
+            if (allPresent) {
+              subSlotIds.forEach((id) => prefSelectedSlots.delete(id));
+            } else {
+              subSlotIds.forEach((id) => prefSelectedSlots.add(id));
+            }
+            refRenderSelection();
+          };
+
+          const refRenderSelection = () => {
+            const inc = getInc();
+            miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+              cell.classList.remove('selected', 'partial', 'partial-top', 'partial-bottom');
+              cell.style.removeProperty('--partial-height');
+            });
+            miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+              const day = cell.dataset.day;
+              const displayTime = cell.dataset.time;
+              const subTimes = Time.blockSubslots15(displayTime, inc);
+              const subSlotIds = subTimes.map((t) => `${day}-${t}`);
+              const count = subSlotIds.length;
+              let covered = 0;
+              subSlotIds.forEach((id) => { if (prefSelectedSlots.has(id)) covered++; });
+              if (covered === count && covered > 0) {
+                cell.classList.add('selected');
+              } else if (covered > 0) {
+                let startCovered = 0;
+                for (let i = 0; i < count; i++) {
+                  if (prefSelectedSlots.has(subSlotIds[i])) startCovered++; else break;
+                }
+                let endCovered = 0;
+                for (let i = count - 1; i >= 0; i--) {
+                  if (prefSelectedSlots.has(subSlotIds[i])) endCovered++; else break;
+                }
+                let ratio = 0;
+                let align = 'top';
+                if (startCovered > 0 && endCovered === 0) {
+                  ratio = startCovered / count;
+                  align = 'top';
+                } else if (endCovered > 0 && startCovered === 0) {
+                  ratio = endCovered / count;
+                  align = 'bottom';
+                } else {
+                  ratio = covered / count;
+                  align = 'top';
+                }
+                cell.classList.add('partial');
+                cell.classList.toggle('partial-top', align === 'top');
+                cell.classList.toggle('partial-bottom', align === 'bottom');
+                cell.style.setProperty('--partial-height', `${Math.round(ratio * 100)}%`);
+              }
+            });
+          };
+
+          const refHandleMouseDown = (slot) => {
+            isRefDragging = true;
+            refStartSlot = slot;
+            document.body.style.userSelect = 'none';
+          };
+          const refHandleMouseMove = (slot) => {
+            if (!isRefDragging) return;
+            clearRefHighlights();
+            highlightRefSlots(refStartSlot, slot);
+          };
+          const refHandleMouseUp = () => {
+            if (!isRefDragging) return;
+            const highlighted = miniGrid.querySelectorAll('.dragging-highlight');
+            highlighted.forEach((cell) => {
+              cell.classList.remove('dragging-highlight');
+              applyRefToggleForDisplaySlot(cell);
+            });
+            isRefDragging = false;
+            refStartSlot = null;
+            document.body.style.userSelect = '';
+          };
+          document.addEventListener('mouseup', refHandleMouseUp);
+
+          const buildMiniGrid = () => {
+            Grid.generateTimeSlots(miniGrid, getInc(), {
+              isSearchGrid: true,
+              onMouseDown: refHandleMouseDown,
+              onMouseMove: refHandleMouseMove,
+              onClick: (slot) => applyRefToggleForDisplaySlot(slot)
+            });
+            refRenderSelection();
+          };
+
+          incSelect.addEventListener('change', buildMiniGrid);
+          buildMiniGrid();
+        };
+
+        // Wire actions
+        const viewBtn = row.querySelector('.view-edit-ref');
+        const findBtn = row.querySelector('.find-therapist-ref');
+        const delBtn = row.querySelector('.delete-ref');
+        const saveBtn = editRow.querySelector('.ref-save');
+        const cancelBtn = editRow.querySelector('.ref-cancel');
+
+        // Auto-default Max/Day = Total/5 until user edits Max/Day (inline editor for existing referrals)
+        const totalInput = editRow.querySelector('.ref-edit-total');
+        const maxDayInput = editRow.querySelector('.ref-edit-maxday');
+        let refMaxPerDayDirty = false;
+        // If max/day already has a value (> 0), treat as user-defined (do not auto-overwrite)
+        if (maxDayInput && maxDayInput.value && Number(maxDayInput.value) > 0) {
+          refMaxPerDayDirty = true;
+        }
+        if (totalInput && maxDayInput) {
+          totalInput.addEventListener('input', () => {
+            const val = Number(totalInput.value || 0);
+            if (!refMaxPerDayDirty) {
+              maxDayInput.value = defaultMaxPerDayFromTotal(val);
+            }
+          });
+          maxDayInput.addEventListener('input', () => { refMaxPerDayDirty = true; });
+        }
+
+        viewBtn.addEventListener('click', () => {
+          const isOpen = editRow.style.display === 'table-row';
+          // close others
+          referralsListBody.querySelectorAll(`tr.${openClass}`).forEach((e) => (e.style.display = 'none'));
+          const nextOpen = isOpen ? 'none' : 'table-row';
+          editRow.style.display = nextOpen;
+          if (nextOpen === 'table-row') ensureMiniScheduleInitialized();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+          editRow.style.display = 'none';
+        });
+
+        findBtn.addEventListener('click', () => {
+          const current = TMS.Store.findReferral(r.id);
+          loadReferralToSearch(current || r);
+        });
+
+        delBtn.addEventListener('click', () => {
+          if (!confirm('Delete this referral?')) return;
+          TMS.Store.deleteReferral(r.id);
+          renderReferralsList();
+        });
+
+        saveBtn.addEventListener('click', () => {
+          const patch = {
+            childName: editRow.querySelector('.ref-edit-name').value.trim(),
+            childId: editRow.querySelector('.ref-edit-id').value.trim(),
+            totalReferredHours: Number(editRow.querySelector('.ref-edit-total').value || 0),
+            maxDesiredPerDay: Number(editRow.querySelector('.ref-edit-maxday').value || 0),
+            status: editRow.querySelector('.ref-edit-status').value,
+            crossStreets: editRow.querySelector('.ref-edit-cross').value.trim(),
+            city: editRow.querySelector('.ref-edit-city').value.trim(),
+            state: editRow.querySelector('.ref-edit-state').value.trim(),
+            zip: editRow.querySelector('.ref-edit-zip').value.trim(),
+            preferredAvailability: sortSlotIds(Array.from(prefSelectedSlots || []))
+          };
+          try {
+            TMS.Store.updateReferral(r.id, patch);
+            renderReferralsList();
+          } catch (e) {
+            if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
+              alert('Another referral already exists with this Child ID. Please change the Child ID or edit the existing referral.');
+            } else {
+              console.error('Inline update referral failed:', e);
+              alert('Failed to update referral.');
+            }
+          }
+        });
+      });
+    };
+
+    // Inline "Add New Referral" creation on Referrals tab
+    const addNewReferralInline = () => {
+      if (!referralsListBody) return;
+
+      // Close any open inline editors
+      referralsListBody.querySelectorAll('tr.referral-edit-row').forEach((e) => (e.style.display = 'none'));
+
+      // Create display row
+      const row = document.createElement('tr');
+      row.className = 'new-referral-row';
+      row.innerHTML = `
+        <td></td>
+        <td></td>
+        <td>0</td>
+        <td>0</td>
+        <td>referred</td>
+        <td><span class="chip">New</span></td>
+      `;
+
+      // Create inline editor row
+      const editRow = document.createElement('tr');
+      editRow.className = 'referral-edit-row';
+      editRow.style.display = 'table-row';
+      editRow.innerHTML = `
+        <td colspan="6">
+          <div class="inline-edit-form referral-edit-panel">
+            <div class="form-row">
+              <input type="text" class="ref-edit-name" value="" placeholder="Child Name">
+              <input type="text" class="ref-edit-id" value="" placeholder="Child ID">
+            </div>
+            <div class="form-row">
+              <input type="number" class="ref-edit-total" value="0" step="0.25" placeholder="Total Hours">
+              <input type="number" class="ref-edit-maxday" value="0" step="0.25" placeholder="Max/Day">
+              <select class="ref-edit-status">
+                <option value="referred" selected>Referred</option>
+                <option value="staffed">Staffed</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <input type="text" class="ref-edit-cross" value="" placeholder="Cross Streets">
+              <input type="text" class="ref-edit-city" value="" placeholder="City">
+              <input type="text" class="ref-edit-state" value="" placeholder="State">
+              <input type="text" class="ref-edit-zip" value="" placeholder="Zip">
+            </div>
+
+            <div class="mini-schedule-controls">
+              <label>Preferred Time - Increment:
+                <select class="ref-inc">
+                  <option value="15" selected>15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="60">60 min</option>
+                </select>
+              </label>
+              <button class="btn btn-success ref-save">Save</button>
+            </div>
+            <div class="schedule-grid mini-schedule ref-mini-grid">
+              <div class="grid-header">Time</div>
+              <div class="grid-header">Sunday</div>
+              <div class="grid-header">Monday</div>
+              <div class="grid-header">Tuesday</div>
+              <div class="grid-header">Wednesday</div>
+              <div class="grid-header">Thursday</div>
+              <div class="grid-header">Friday</div>
+              <div class="grid-header">Saturday</div>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-secondary ref-cancel">Cancel</button>
+            </div>
+          </div>
+        </td>
+      `;
+
+      // Insert at top
+      if (referralsListBody.firstChild) {
+        referralsListBody.insertBefore(row, referralsListBody.firstChild);
+        referralsListBody.insertBefore(editRow, row.nextSibling);
+      } else {
+        referralsListBody.appendChild(row);
+        referralsListBody.appendChild(editRow);
+      }
+
+      // Mini schedule (Preferred time) setup for this new row
+      let refMiniInitialized = false;
+      let prefSelectedSlots = new Set();
+      let isRefDragging = false;
+      let refStartSlot = null;
+
+      const ensureMiniScheduleInitialized = () => {
+        if (refMiniInitialized) return;
+        refMiniInitialized = true;
+
+        const incSelect = editRow.querySelector('.ref-inc');
+        const miniGrid = editRow.querySelector('.ref-mini-grid');
+        if (!incSelect || !miniGrid) return;
+
+        const getInc = () => {
+          const v = parseInt(incSelect.value || '15', 10);
+          return [15, 30, 60].includes(v) ? v : 15;
+        };
+
+        const clearRefHighlights = () => {
+          miniGrid.querySelectorAll('.dragging-highlight').forEach((s) => s.classList.remove('dragging-highlight'));
+        };
+
+        const highlightRefSlots = (start, end) => {
+          const startDay = parseInt(start.dataset.day);
+          const shsm = start.dataset.time.split(':');
+          const endDay = parseInt(end.dataset.day);
+          const ehEm = end.dataset.time.split(':');
+          const sh = parseInt(shsm[0], 10), sm = parseInt(shsm[1], 10);
+          const eh = parseInt(ehEm[0], 10), em = parseInt(ehEm[1], 10);
+          const startTotal = sh * 60 + sm;
+          const endTotal = eh * 60 + em;
+          const dayRange = [Math.min(startDay, endDay), Math.max(startDay, endDay)];
+          const timeRange = [Math.min(startTotal, endTotal), Math.max(startTotal, endTotal)];
+          miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+            const d = parseInt(cell.dataset.day);
+            const hm = cell.dataset.time.split(':');
+            const h = parseInt(hm[0], 10), m = parseInt(hm[1], 10);
+            const t = h * 60 + m;
+            if (d >= dayRange[0] && d <= dayRange[1] && t >= timeRange[0] && t <= timeRange[1]) {
+              cell.classList.add('dragging-highlight');
+            }
+          });
+        };
+
+        const applyRefToggleForDisplaySlot = (slotEl) => {
+          const inc = getInc();
+          const day = slotEl.dataset.day;
+          const displayTime = slotEl.dataset.time;
+          const subTimes = Time.blockSubslots15(displayTime, inc);
+          const subSlotIds = subTimes.map((t) => `${day}-${t}`);
+          const allPresent = subSlotIds.every((id) => prefSelectedSlots.has(id));
+          if (allPresent) {
+            subSlotIds.forEach((id) => prefSelectedSlots.delete(id));
+          } else {
+            subSlotIds.forEach((id) => prefSelectedSlots.add(id));
+          }
+          refRenderSelection();
+        };
+
+        const refRenderSelection = () => {
+          const inc = getInc();
+          miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+            cell.classList.remove('selected', 'partial', 'partial-top', 'partial-bottom');
+            cell.style.removeProperty('--partial-height');
+          });
+          miniGrid.querySelectorAll('.time-slot').forEach((cell) => {
+            const day = cell.dataset.day;
+            const displayTime = cell.dataset.time;
+            const subTimes = Time.blockSubslots15(displayTime, inc);
+            const subSlotIds = subTimes.map((t) => `${day}-${t}`);
+            const count = subSlotIds.length;
+            let covered = 0;
+            subSlotIds.forEach((id) => { if (prefSelectedSlots.has(id)) covered++; });
+            if (covered === count && covered > 0) {
+              cell.classList.add('selected');
+            } else if (covered > 0) {
+              let startCovered = 0;
+              for (let i = 0; i < count; i++) { if (prefSelectedSlots.has(subSlotIds[i])) startCovered++; else break; }
+              let endCovered = 0;
+              for (let i = count - 1; i >= 0; i--) { if (prefSelectedSlots.has(subSlotIds[i])) endCovered++; else break; }
+              let ratio = 0;
+              let align = 'top';
+              if (startCovered > 0 && endCovered === 0) { ratio = startCovered / count; align = 'top'; }
+              else if (endCovered > 0 && startCovered === 0) { ratio = endCovered / count; align = 'bottom'; }
+              else { ratio = covered / count; align = 'top'; }
+              cell.classList.add('partial');
+              cell.classList.toggle('partial-top', align === 'top');
+              cell.classList.toggle('partial-bottom', align === 'bottom');
+              cell.style.setProperty('--partial-height', `${Math.round(ratio * 100)}%`);
+            }
+          });
+        };
+
+        const refHandleMouseDown = (slot) => {
+          isRefDragging = true;
+          refStartSlot = slot;
+          document.body.style.userSelect = 'none';
+        };
+        const refHandleMouseMove = (slot) => {
+          if (!isRefDragging) return;
+          miniGrid.querySelectorAll('.dragging-highlight').forEach((s) => s.classList.remove('dragging-highlight'));
+          highlightRefSlots(refStartSlot, slot);
+        };
+        const refHandleMouseUp = () => {
+          if (!isRefDragging) return;
+          const highlighted = miniGrid.querySelectorAll('.dragging-highlight');
+          highlighted.forEach((cell) => {
+            cell.classList.remove('dragging-highlight');
+            applyRefToggleForDisplaySlot(cell);
+          });
+          isRefDragging = false;
+          refStartSlot = null;
+          document.body.style.userSelect = '';
+        };
+        document.addEventListener('mouseup', refHandleMouseUp);
+
+        const buildMiniGrid = () => {
+          Grid.generateTimeSlots(miniGrid, getInc(), {
+            isSearchGrid: true,
+            onMouseDown: refHandleMouseDown,
+            onMouseMove: refHandleMouseMove,
+            onClick: (slot) => applyRefToggleForDisplaySlot(slot)
+          });
+          refRenderSelection();
+        };
+
+        incSelect.addEventListener('change', buildMiniGrid);
+        buildMiniGrid();
+      };
+
+      // Auto-init now that it's opened
+      ensureMiniScheduleInitialized();
+
+      // Wire actions
+      const saveBtn = editRow.querySelector('.ref-save');
+      const cancelBtn = editRow.querySelector('.ref-cancel');
+
+      // Auto-default Max/Day = Total/5 until user edits Max/Day (new inline referral)
+      const totalInput = editRow.querySelector('.ref-edit-total');
+      const maxDayInput = editRow.querySelector('.ref-edit-maxday');
+      let refMaxPerDayDirty = false;
+      if (totalInput && maxDayInput) {
+        totalInput.addEventListener('input', () => {
+          const val = Number(totalInput.value || 0);
+          if (!refMaxPerDayDirty) {
+            maxDayInput.value = defaultMaxPerDayFromTotal(val);
+          }
+        });
+        maxDayInput.addEventListener('input', () => { refMaxPerDayDirty = true; });
+      }
+
+      cancelBtn.addEventListener('click', () => {
+        try { referralsListBody.removeChild(editRow); } catch (e) {}
+        try { referralsListBody.removeChild(row); } catch (e) {}
+      });
+
+      saveBtn.addEventListener('click', () => {
+        const childName = editRow.querySelector('.ref-edit-name').value.trim();
+        const childId = editRow.querySelector('.ref-edit-id').value.trim();
+        const totalReferredHours = Number(editRow.querySelector('.ref-edit-total').value || 0);
+        const maxDesiredPerDay = Number(editRow.querySelector('.ref-edit-maxday').value || 0);
+        const status = editRow.querySelector('.ref-edit-status').value;
+        const crossStreets = editRow.querySelector('.ref-edit-cross').value.trim();
+        const city = editRow.querySelector('.ref-edit-city').value.trim();
+        const state = editRow.querySelector('.ref-edit-state').value.trim();
+        const zip = editRow.querySelector('.ref-edit-zip').value.trim();
+
+        // Required: Name, ID, Address (Cross Streets + City + Zip)
+        if (!childName || !childId || !crossStreets || !city || !zip) {
+          alert('Please enter Child Name, Child ID, Cross Streets, City, and Zip.');
+          return;
+        }
+
+        const baseId = slugify(`${childName}-${childId}`);
+        const uniqueId = `${baseId}-${Date.now()}`;
+        const ref = {
+          id: uniqueId,
+          childName,
+          childId,
+          totalReferredHours: roundToQuarter(totalReferredHours),
+          maxDesiredPerDay: roundToQuarter(maxDesiredPerDay),
+          status,
+          crossStreets,
+          city,
+          state,
+          zip,
+          preferredAvailability: sortSlotIds(Array.from(prefSelectedSlots || []))
+        };
+
+        try {
+          TMS.Store.addReferral(ref);
+          renderReferralsList();
+          alert('Referral saved.');
+        } catch (e) {
+          if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
+            alert('A referral already exists with this Child ID. Please use a different ID or edit the existing referral.');
+          } else {
+            console.error('Save new referral failed:', e);
+            alert('Failed to save referral.');
+          }
+        }
+      });
+    };
+
+    const handleSaveReferral = () => {
+      const childName = (searchChildNameInput && searchChildNameInput.value || '').trim();
+      const childId = (searchChildIdInput && searchChildIdInput.value || '').trim();
+      if (!childName || !childId) {
+        alert('Please enter Child Name and Child ID.');
+        return;
+      }
+      const totalHrs = Number((searchTotalHoursInput && searchTotalHoursInput.value) || 0);
+      const maxDay = Number((searchMaxPerDayInput && searchMaxPerDayInput.value) || defaultMaxPerDayFromTotal(totalHrs));
+      const status = (searchStatusSelect && searchStatusSelect.value) || 'referred';
+
+      const cross = (document.getElementById('search-cross-streets') && document.getElementById('search-cross-streets').value || '').trim();
+      const city = (document.getElementById('search-city') && document.getElementById('search-city').value || '').trim();
+      const state = (document.getElementById('search-state') && document.getElementById('search-state').value || '').trim();
+      const zip = (document.getElementById('search-zip') && document.getElementById('search-zip').value || '').trim();
+
+      const availability = sortSlotIds(Array.from(searchSelectedSlots));
+ 
+      // Build payload (only child/address/status + availability; no therapist saved)
+      const payload = {
+        childName,
+        childId,
+        totalReferredHours: roundToQuarter(totalHrs),
+        maxDesiredPerDay: roundToQuarter(maxDay),
+        status,
+        crossStreets: cross,
+        city, state, zip,
+        availability
+      };
+
+      // If not editing and Child ID already exists, load existing instead of creating duplicate
+      const existingById = TMS.Store.findReferralByChildId(childId);
+      if (!currentReferralEditingId && existingById) {
+        alert('A referral already exists for this Child ID. Loading it so you can review or update.');
+        loadReferralToSearch(existingById);
+        return;
+      }
+ 
+      if (currentReferralEditingId) {
+        // Update existing referral (avoid duplicate creation)
+        try {
+          TMS.Store.updateReferral(currentReferralEditingId, payload);
+          renderReferralsList();
+          alert('Referral updated.');
+          resetReferralEditMode();
+          clearTherapistSelectionOnSearch();
+        } catch (e) {
+          if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
+            alert('Another referral already exists with this Child ID. Please change the Child ID or edit the existing referral.');
+          } else {
+            console.error('Update referral failed:', e);
+            alert('Failed to update referral.');
+          }
+          return;
+        }
+      } else {
+        // Create new referral
+        try {
+          const baseId = slugify(`${childName}-${childId}`);
+          const uniqueId = `${baseId}-${Date.now()}`;
+          const ref = { id: uniqueId, ...payload };
+          TMS.Store.addReferral(ref);
+          renderReferralsList();
+          alert('Referral saved.');
+          clearTherapistSelectionOnSearch();
+        } catch (e) {
+          if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
+            // Race-safety: if duplicate detected by store, load existing instead
+            const exist = TMS.Store.findReferralByChildId(childId);
+            if (exist) {
+              alert('A referral already exists for this Child ID. Loading it so you can review or update.');
+              loadReferralToSearch(exist);
+            } else {
+              alert('A referral with this Child ID already exists.');
+            }
+          } else {
+            console.error('Save referral failed:', e);
+            alert('Failed to save referral.');
+          }
+          return;
+        }
+      }
     };
 
     const clearCaseForm = () => {
@@ -1203,12 +1944,32 @@
         }
       });
     }
+    // Auto-default max/day from total referred hours unless user edited
+    if (searchTotalHoursInput) {
+      searchTotalHoursInput.addEventListener('input', () => {
+        const val = Number(searchTotalHoursInput.value || 0);
+        if (!maxPerDayDirty && searchMaxPerDayInput) {
+          searchMaxPerDayInput.value = defaultMaxPerDayFromTotal(val);
+        }
+      });
+    }
+    if (searchMaxPerDayInput) {
+      searchMaxPerDayInput.addEventListener('input', () => { maxPerDayDirty = true; });
+    }
+    // Save referral
+    if (saveReferralButton) {
+      saveReferralButton.addEventListener('click', handleSaveReferral);
+    }
+    if (addNewReferralButton) {
+      addNewReferralButton.addEventListener('click', addNewReferralInline);
+    }
 
     // Init
     populateTherapistSelectDropdown();
     populateTherapistList();
     buildSearchTherapistOptions();
     renderSearchLegendForTherapist(null);
+    renderReferralsList();
     // Build grids first, then render
     Grid.generateTimeSlots(editBookingScheduleGrid, getEditInc(), {
       onMouseDown: handleEditMouseDown,
