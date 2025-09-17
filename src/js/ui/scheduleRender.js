@@ -16,6 +16,19 @@
     '#b3d9ff'  // 9 Lighter Blue
   ];
 
+  // Format hours (15-min slots / 4) without trailing zeros (e.g., 2, 2.5, 2.25, 2.75)
+  function formatHoursFromSlots(slotCount) {
+    const hours = slotCount / 4;
+    // Keep up to 2 decimals, trim trailing zeros
+    return parseFloat(hours.toFixed(2)).toString();
+  }
+
+  // HH:MM utilities for contiguous run detection
+  function toMinutes(hhmm) {
+    const parts = hhmm.split(':'); return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+  }
+  function minutesDiff(a, b) { return toMinutes(b) - toMinutes(a); }
+
   /**
    * UI render helpers for schedules and legend.
    * Pure DOM write operations; no state mutation here.
@@ -54,12 +67,13 @@
 
   /**
    * Render a single case on the grid for the given increment.
-   * Inserts labels only at the start of contiguous display blocks.
+   * Also places a small hours badge on the last full display cell of each contiguous run.
    */
   function renderSingleCase(gridElement, clientCase, inc) {
     // Build a fast lookup of the case's 15-min slots
     const schedSet = new Set((clientCase.schedule || []).map((s) => s.slotId));
-    // Identify which display-level slots have any coverage
+
+    // Identify which display-level slots have any coverage (for base painting)
     const displayCovered = new Set();
     (clientCase.schedule || []).forEach((s) => {
       const [dayStr, timeStr] = s.slotId.split('-');
@@ -67,6 +81,7 @@
       displayCovered.add(`${dayStr}-${disp}`);
     });
 
+    // Paint the case (full/partial per display cell)
     displayCovered.forEach((slotId) => {
       const [dayStr, timeStr] = slotId.split('-');
       const slot = gridElement.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${timeStr}"]`);
@@ -84,7 +99,7 @@
         // Full coverage: fill with case color (keep case colors in Edit view)
         slot.classList.add(`case-color-${clientCase.colorIndex}`);
       } else if (covered > 0) {
-        // Partial coverage: compute direction and ratio, draw blue overlay like Search
+        // Partial coverage
         let startCovered = 0;
         for (let i = 0; i < count; i++) {
           if (schedSet.has(subSlotIds[i])) startCovered++; else break;
@@ -103,7 +118,6 @@
           ratio = endCovered / count;
           align = 'bottom';
         } else {
-          // Non-contiguous: fallback to proportional top fill
           ratio = covered / count;
           align = 'top';
         }
@@ -127,6 +141,72 @@
         // Name label omitted; legend provides mapping.
       }
     });
+
+    // Place "block total hours" badges on last full display cell of each contiguous run (per day)
+    const byDay = new Map();
+    (clientCase.schedule || []).forEach((s) => {
+      const [dayStr, timeStr] = s.slotId.split('-');
+      if (!byDay.has(dayStr)) byDay.set(dayStr, []);
+      byDay.get(dayStr).push(timeStr);
+    });
+
+    byDay.forEach((times, dayStr) => {
+      // Sort HH:MM lexicographically works because zero-padded minutes only; hours are integers
+      times.sort((a, b) => toMinutes(a) - toMinutes(b));
+      // Build contiguous runs (15-min apart)
+      let run = [];
+      for (let i = 0; i < times.length; i++) {
+        const t = times[i];
+        if (run.length === 0) {
+          run.push(t);
+        } else {
+          const prev = run[run.length - 1];
+          if (minutesDiff(prev, t) === 15) {
+            run.push(t);
+          } else {
+            // finalize previous run
+            placeBadgeForRun(dayStr, run, clientCase, inc, gridElement);
+            run = [t];
+          }
+        }
+      }
+      if (run.length > 0) {
+        placeBadgeForRun(dayStr, run, clientCase, inc, gridElement);
+      }
+    });
+
+    function placeBadgeForRun(dayStr, runTimes, c, inc, grid) {
+      const slotsPerDisplay = inc / 15;
+      const totalSlots = runTimes.length;
+      const hoursStr = formatHoursFromSlots(totalSlots);
+
+      // Map display cell -> covered subslot count
+      const coverMap = new Map();
+      runTimes.forEach((t) => {
+        const disp = Time.timeToDisplay(t, inc);
+        coverMap.set(disp, (coverMap.get(disp) || 0) + 1);
+      });
+      // Choose last full cell; if none, choose the last display cell in the run
+      let lastFull = null;
+      let lastAny = null;
+      Array.from(coverMap.keys()).sort((a, b) => toMinutes(a) - toMinutes(b)).forEach((disp) => {
+        lastAny = disp;
+        if (coverMap.get(disp) === slotsPerDisplay) lastFull = disp;
+      });
+      const labelTime = lastFull || lastAny;
+      if (!labelTime) return;
+
+      const cell = grid.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${labelTime}"]`);
+      if (!cell) return;
+
+      // Append badge (avoid duplicates if any)
+      const existing = cell.querySelector('.block-total-label');
+      if (existing) existing.remove();
+      cell.insertAdjacentHTML(
+        'beforeend',
+        `<span class="block-total-label" title="${hoursStr} hours booked">${hoursStr}h</span>`
+      );
+    }
   }
   Render.renderSingleCase = renderSingleCase;
 
@@ -267,6 +347,62 @@
       slot.style.removeProperty('--partial-color');
       slot.style.backgroundImage = `linear-gradient(to bottom, ${stops.join(', ')})`;
     });
+
+    // After painting combined view, place block-total badges for each case (per contiguous run)
+    cases.forEach((c) => {
+      const byDay = new Map();
+      (c.schedule || []).forEach((s) => {
+        const [dayStr, timeStr] = s.slotId.split('-');
+        if (!byDay.has(dayStr)) byDay.set(dayStr, []);
+        byDay.get(dayStr).push(timeStr);
+      });
+      byDay.forEach((times, dayStr) => {
+        times.sort((a, b) => toMinutes(a) - toMinutes(b));
+        let run = [];
+        for (let i = 0; i < times.length; i++) {
+          const t = times[i];
+          if (run.length === 0) {
+            run.push(t);
+          } else {
+            const prev = run[run.length - 1];
+            if (minutesDiff(prev, t) === 15) {
+              run.push(t);
+            } else {
+              placeBadgeForRunCombined(dayStr, run, c, inc, gridElement);
+              run = [t];
+            }
+          }
+        }
+        if (run.length > 0) placeBadgeForRunCombined(dayStr, run, c, inc, gridElement);
+      });
+    });
+
+    function placeBadgeForRunCombined(dayStr, runTimes, c, inc, grid) {
+      const slotsPerDisplay = inc / 15;
+      const totalSlots = runTimes.length;
+      const hoursStr = formatHoursFromSlots(totalSlots);
+      const coverMap = new Map();
+      runTimes.forEach((t) => {
+        const disp = Time.timeToDisplay(t, inc);
+        coverMap.set(disp, (coverMap.get(disp) || 0) + 1);
+      });
+      let lastFull = null;
+      let lastAny = null;
+      Array.from(coverMap.keys()).sort((a, b) => toMinutes(a) - toMinutes(b)).forEach((disp) => {
+        lastAny = disp;
+        if (coverMap.get(disp) === slotsPerDisplay) lastFull = disp;
+      });
+      const labelTime = lastFull || lastAny;
+      if (!labelTime) return;
+      const cell = grid.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${labelTime}"]`);
+      if (!cell) return;
+      const existing = cell.querySelector(`.block-total-label[data-case-id="${c.id}"]`);
+      if (existing) existing.remove();
+      cell.insertAdjacentHTML(
+        'beforeend',
+        `<span class="block-total-label" data-case-id="${c.id}" title="${hoursStr} hours booked">${hoursStr}h</span>`
+      );
+    }
   }
   Render.renderCombined = renderCombinedGradient;
 
@@ -277,14 +413,24 @@
     if (!legendElement) return;
     legendElement.innerHTML = '';
     const seen = new Set();
+    let totalAllSlots = 0;
     cases.forEach((c) => {
       if (seen.has(c.id)) return;
       seen.add(c.id);
       const item = document.createElement('div');
       item.className = 'legend-item';
-      item.innerHTML = `<span class="legend-swatch case-color-${c.colorIndex}"></span><span>${c.name} - #${c.patientId}</span>`;
+      const totalSlots = (c.schedule || []).length;
+      totalAllSlots += totalSlots;
+      const hoursStr = formatHoursFromSlots(totalSlots);
+      item.innerHTML = `<span class="legend-swatch case-color-${c.colorIndex}"></span><span>${c.name} - #${c.patientId} (${hoursStr}h)</span>`;
       legendElement.appendChild(item);
     });
+    // Append a total item across all visible cases
+    const totalHoursStr = formatHoursFromSlots(totalAllSlots);
+    const totalItem = document.createElement('div');
+    totalItem.className = 'legend-item legend-total';
+    totalItem.innerHTML = `<span>Total: ${totalHoursStr}h</span>`;
+    legendElement.appendChild(totalItem);
   }
   Render.renderLegend = renderLegend;
 

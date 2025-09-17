@@ -69,7 +69,9 @@
     // New Search controls
     const searchTherapistSelect = document.getElementById('search-therapist-select');
     const searchBoroughFilterGroup = document.getElementById('search-borough-filter');
-    const searchMaxHoursInput = document.getElementById('search-max-hours');
+    const searchCurrentHoursInput = document.getElementById('search-current-hours');
+    const searchCasesLegend = document.getElementById('search-cases-legend');
+    const searchBreakMinsInput = document.getElementById('search-break-mins');
 
     // Helpers
     const setCompactMode = (on) => {
@@ -98,16 +100,16 @@
     const buildSearchTherapistOptions = () => {
       if (!searchTherapistSelect) return;
       const boroughs = getActiveSearchBoroughs();
-      const maxHoursStr = (searchMaxHoursInput && searchMaxHoursInput.value || '').trim();
-      const maxHours = maxHoursStr === '' ? null : Number(maxHoursStr);
+      const currentHoursStr = (searchCurrentHoursInput && searchCurrentHoursInput.value || '').trim();
+      const currentHours = currentHoursStr === '' ? null : Number(currentHoursStr);
       // Clear current options
       searchTherapistSelect.innerHTML = '<option value="">Select Therapist...</option>';
       let list = therapists;
       if (boroughs.length > 0) {
         list = list.filter((t) => (t.boroughPrefs || []).some((b) => boroughs.includes(b)));
       }
-      if (maxHours !== null && !Number.isNaN(maxHours)) {
-        list = list.filter((t) => (t.totalHours ?? 0) <= maxHours);
+      if (currentHours !== null && !Number.isNaN(currentHours)) {
+        list = list.filter((t) => (t.totalHours ?? 0) <= currentHours);
       }
       const sorted = [...list].sort((a, b) => (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`));
       sorted.forEach((t) => {
@@ -126,6 +128,30 @@
       return set;
     };
 
+    // Case color palette (match CSS case-color-0..9 shades)
+    const CASE_COLORS = [
+      '#aed6f1', // 0 Light Blue
+      '#a9dfbf', // 1 Light Green
+      '#f5b7b1', // 2 Light Red/Coral
+      '#f7dc6f', // 3 Light Yellow
+      '#d2b4de', // 4 Light Purple
+      '#a3e4d7', // 5 Light Teal
+      '#f1948a', // 6 Light Orange/Salmon
+      '#e6b0aa', // 7 Light Brown
+      '#d5dbdb', // 8 Light Gray
+      '#b3d9ff'  // 9 Lighter Blue
+    ];
+
+    // Helpers for block totals on Search
+    const formatHoursFromSlots = (slotCount) => {
+      const hours = slotCount / 4;
+      return parseFloat(hours.toFixed(2)).toString();
+    };
+    const toMinutes = (hhmm) => {
+      const parts = hhmm.split(':'); return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
+    };
+    const minutesDiff = (a, b) => toMinutes(b) - toMinutes(a);
+
     const clearTherapistBusyOverlay = () => {
       if (!searchScheduleGrid) return;
       searchScheduleGrid.querySelectorAll('.time-slot').forEach((cell) => {
@@ -135,10 +161,10 @@
     };
 
     const overlayTherapistOnSearchGrid = (therapist) => {
+      // Legacy red busy overlay (kept for reference; not used when case colors are enabled)
       if (!therapist || !searchScheduleGrid) return;
       const inc = getSearchInc();
       const schedSet = getTherapistScheduleSet(therapist);
-      // Iterate all display cells and compute coverage
       searchScheduleGrid.querySelectorAll('.time-slot').forEach((cell) => {
         const dayStr = cell.dataset.day;
         const displayTime = cell.dataset.time;
@@ -146,21 +172,16 @@
         const subTimes = Time.blockSubslots15(displayTime, inc);
         const count = subTimes.length;
         let covered = 0;
-        // Count coverage
         for (let i = 0; i < count; i++) {
           const id = `${dayStr}-${subTimes[i]}`;
           if (schedSet.has(id)) covered++;
         }
-        // Reset any previous cell overlay
         cell.classList.remove('busy', 'busy-top', 'busy-bottom', 'busy-full');
         cell.style.removeProperty('--busy-height');
-
         if (covered === 0) return;
         if (covered === count) {
-          // Full busy coverage
           cell.classList.add('busy-full');
         } else {
-          // Partial coverage, compute alignment (from start or from end)
           let startCovered = 0;
           for (let i = 0; i < count; i++) {
             const id = `${dayStr}-${subTimes[i]}`;
@@ -186,6 +207,269 @@
           cell.style.setProperty('--busy-height', `${Math.round(ratio * 100)}%`);
         }
       });
+    };
+
+    // Clear case-color overlay (Search)
+    const clearSearchCaseOverlay = () => {
+      if (!searchScheduleGrid) return;
+      searchScheduleGrid.querySelectorAll('.time-slot').forEach((cell) => {
+        cell.classList.remove('case-overlay', 'break', 'break-bottom');
+        cell.style.removeProperty('--case-gradient');
+        cell.style.removeProperty('--break-height');
+        // Remove any existing block total badges
+        cell.querySelectorAll('.block-total-label').forEach((el) => el.remove());
+      });
+    };
+
+    // Overlay therapist’s cases using case colors with proportional fills (Search)
+    const overlayTherapistCaseColorsOnSearchGrid = (therapist) => {
+      if (!therapist || !searchScheduleGrid) return;
+      const inc = getSearchInc();
+
+      // Build a map of slotId => segments [{startPct, endPct, color}]
+      const cellSegments = new Map();
+
+      (therapist.cases || []).forEach((c) => {
+        const color = CASE_COLORS[c.colorIndex % CASE_COLORS.length] || '#007bff';
+        // For each 15-min slot in this case, determine its display cell
+        const sched = c.schedule || [];
+        // Build a Set for quick lookup
+        const caseSet = new Set(sched.map((s) => s.slotId));
+
+        // Determine which display cells this case touches by deriving from its 15-min slots
+        const displayCells = new Set();
+        sched.forEach((s) => {
+          const [dayStr, timeStr] = s.slotId.split('-');
+          const disp = Time.timeToDisplay(timeStr, inc);
+          displayCells.add(`${dayStr}-${disp}`);
+        });
+
+        displayCells.forEach((slotId) => {
+          const [dayStr, displayTime] = slotId.split('-');
+          const subTimes = Time.blockSubslots15(displayTime, inc);
+          const count = subTimes.length;
+          // Compute contiguous coverage within this display cell for this case
+          let first = -1, last = -1;
+          for (let i = 0; i < count; i++) {
+            const id = `${dayStr}-${subTimes[i]}`;
+            if (caseSet.has(id)) {
+              if (first === -1) first = i;
+              last = i;
+            }
+          }
+          if (first !== -1) {
+            const startPct = Math.round((first / count) * 100);
+            const endPct = Math.round(((last + 1) / count) * 100);
+            const arr = cellSegments.get(slotId) || [];
+            arr.push({ startPct, endPct, color });
+            cellSegments.set(slotId, arr);
+          }
+        });
+      });
+
+      // Apply linear-gradient to each touched cell
+      cellSegments.forEach((segments, slotId) => {
+        const [dayStr, timeStr] = slotId.split('-');
+        const cell = searchScheduleGrid.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${timeStr}"]`);
+        if (!cell) return;
+        segments.sort((a, b) => a.startPct - b.startPct);
+        let stops = [];
+        let cursor = 0;
+        segments.forEach((seg) => {
+          if (seg.startPct > cursor) {
+            stops.push(`transparent ${cursor}% ${seg.startPct}%`);
+          }
+          stops.push(`${seg.color} ${seg.startPct}% ${seg.endPct}%`);
+          cursor = seg.endPct;
+        });
+        if (cursor < 100) {
+          stops.push(`transparent ${cursor}% 100%`);
+        }
+        const gradient = `linear-gradient(to bottom, ${stops.join(', ')})`;
+        cell.classList.add('case-overlay');
+        cell.style.setProperty('--case-gradient', gradient);
+      });
+    };
+
+    // Place block-total badges for contiguous runs per case/day on Search grid
+    const overlayTherapistBlockTotalsOnSearchGrid = (therapist) => {
+      if (!therapist || !searchScheduleGrid) return;
+      const inc = getSearchInc();
+      // Clear old badges before placing new
+      searchScheduleGrid.querySelectorAll('.block-total-label').forEach((el) => el.remove());
+
+      (therapist.cases || []).forEach((c) => {
+        const byDay = new Map();
+        (c.schedule || []).forEach((s) => {
+          const [dayStr, timeStr] = s.slotId.split('-');
+          if (!byDay.has(dayStr)) byDay.set(dayStr, []);
+          byDay.get(dayStr).push(timeStr);
+        });
+        byDay.forEach((times, dayStr) => {
+          times.sort((a, b) => toMinutes(a) - toMinutes(b));
+          let run = [];
+          for (let i = 0; i < times.length; i++) {
+            const t = times[i];
+            if (run.length === 0) {
+              run.push(t);
+            } else {
+              const prev = run[run.length - 1];
+              if (minutesDiff(prev, t) === 15) {
+                run.push(t);
+              } else {
+                placeBadgeForRun(dayStr, run, c, inc);
+                run = [t];
+              }
+            }
+          }
+          if (run.length > 0) placeBadgeForRun(dayStr, run, c, inc);
+        });
+      });
+
+      function placeBadgeForRun(dayStr, runTimes, c, inc) {
+        const slotsPerDisplay = inc / 15;
+        const totalSlots = runTimes.length;
+        const hoursStr = formatHoursFromSlots(totalSlots);
+
+        const coverMap = new Map();
+        runTimes.forEach((t) => {
+          const disp = Time.timeToDisplay(t, inc);
+          coverMap.set(disp, (coverMap.get(disp) || 0) + 1);
+        });
+        let lastFull = null;
+        let lastAny = null;
+        Array.from(coverMap.keys()).sort((a, b) => toMinutes(a) - toMinutes(b)).forEach((disp) => {
+          lastAny = disp;
+          if (coverMap.get(disp) === slotsPerDisplay) lastFull = disp;
+        });
+        const labelTime = lastFull || lastAny;
+        if (!labelTime) return;
+
+        const cell = searchScheduleGrid.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${labelTime}"]`);
+        if (!cell) return;
+
+        const existing = cell.querySelector(`.block-total-label[data-case-id="${c.id}"]`);
+        if (existing) existing.remove();
+        cell.insertAdjacentHTML(
+          'beforeend',
+          `<span class="block-total-label" data-case-id="${c.id}" title="${hoursStr} hours booked">${hoursStr}h</span>`
+        );
+      }
+    };
+
+    // Overlay travel/break time after each contiguous run (Search)
+    const overlayTherapistBreaksOnSearchGrid = (therapist) => {
+      if (!therapist || !searchScheduleGrid) return;
+      const inc = getSearchInc();
+
+      // Sanitize break mins (0..120 in steps of 15)
+      let breakMins = 0;
+      if (searchBreakMinsInput) {
+        const raw = parseInt(searchBreakMinsInput.value || '0', 10);
+        const clamped = Math.max(0, Math.min(120, isNaN(raw) ? 0 : raw));
+        breakMins = Math.round(clamped / 15) * 15;
+      }
+      if (breakMins <= 0) return;
+      const breakSlotsWanted = breakMins / 15;
+
+      // Build a Set of all 15-min slotIds the therapist is scheduled for (across all cases)
+      const schedSet = getTherapistScheduleSet(therapist);
+
+      const toMin = (t) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const minToHHMM = (m) => {
+        const h = Math.floor(m / 60);
+        const mm = m % 60;
+        return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      };
+
+      (therapist.cases || []).forEach((c) => {
+        const byDay = new Map();
+        (c.schedule || []).forEach((s) => {
+          const [dayStr, timeStr] = s.slotId.split('-');
+          if (!byDay.has(dayStr)) byDay.set(dayStr, []);
+          byDay.get(dayStr).push(timeStr);
+        });
+
+        byDay.forEach((times, dayStr) => {
+          times.sort((a, b) => toMin(a) - toMin(b));
+          let run = [];
+
+          const finalizeRun = () => {
+            if (run.length === 0) return;
+            const lastStart = run[run.length - 1];
+            let nextMin = toMin(lastStart) + 15; // first 15-min segment after the run
+            if (nextMin >= 24 * 60) { run = []; return; }
+
+            // Accumulate break subslots until conflict/limit/day-end
+            const breakTimes = [];
+            let added = 0;
+            while (added < breakSlotsWanted) {
+              if (nextMin >= 24 * 60) break; // stop at midnight
+              const hhmm = minToHHMM(nextMin);
+              const slotId = `${dayStr}-${hhmm}`;
+              if (schedSet.has(slotId)) break; // stop if collides with any scheduled slot
+              breakTimes.push(hhmm);
+              nextMin += 15;
+              added += 1;
+            }
+
+            if (breakTimes.length === 0) { run = []; return; }
+
+            // Paint yellow overlays per display cell with correct alignment (top/bottom)
+            const slotsPerDisplay = inc / 15;
+            const coverInfo = new Map();
+            breakTimes.forEach((t) => {
+              const disp = Time.timeToDisplay(t, inc);
+              const subTimes = Time.blockSubslots15(disp, inc);
+              const idx = subTimes.indexOf(t);
+              const info = coverInfo.get(disp) || { count: 0, minIdx: Number.POSITIVE_INFINITY, maxIdx: -1 };
+              info.count += 1;
+              info.minIdx = Math.min(info.minIdx, idx);
+              info.maxIdx = Math.max(info.maxIdx, idx);
+              coverInfo.set(disp, info);
+            });
+            Array.from(coverInfo.keys()).forEach((disp) => {
+              const info = coverInfo.get(disp);
+              const cell = searchScheduleGrid.querySelector(`.time-slot[data-day="${dayStr}"][data-time="${disp}"]`);
+              if (!cell) return;
+              cell.classList.add('break');
+              cell.classList.remove('break-bottom');
+              const ratio = Math.max(0, Math.min(1, info.count / slotsPerDisplay));
+              cell.style.setProperty('--break-height', `${Math.round(ratio * 100)}%`);
+              // If break occupies the bottom portion of this display cell, anchor to bottom
+              if (ratio < 1 && info.maxIdx === slotsPerDisplay - 1 && info.minIdx > 0) {
+                cell.classList.add('break-bottom');
+              }
+            });
+
+            run = [];
+          };
+
+          for (let i = 0; i < times.length; i++) {
+            const t = times[i];
+            if (run.length === 0) run.push(t);
+            else {
+              const prev = run[run.length - 1];
+              if (toMin(t) - toMin(prev) === 15) run.push(t);
+              else { finalizeRun(); run = [t]; }
+            }
+          }
+          finalizeRun();
+        });
+      });
+    };
+
+    const renderSearchLegendForTherapist = (therapist) => {
+      if (!searchCasesLegend) return;
+      // Clear legend if nothing selected
+      if (!therapist) {
+        searchCasesLegend.innerHTML = '';
+        return;
+      }
+      Render.renderLegend(searchCasesLegend, therapist.cases || []);
     };
 
     const clearCaseForm = () => {
@@ -646,11 +930,16 @@
         onClick: handleSearchClick
       });
       renderSearchSelection();
-      // Re-apply therapist overlay if any is selected
+      // Re-apply therapist case-color overlay if any is selected
       clearTherapistBusyOverlay();
+      clearSearchCaseOverlay();
       if (searchTherapistSelect && searchTherapistSelect.value) {
         const t = therapists.find((x) => x.id === searchTherapistSelect.value);
-        if (t) overlayTherapistOnSearchGrid(t);
+        if (t) {
+          overlayTherapistCaseColorsOnSearchGrid(t);
+          overlayTherapistBlockTotalsOnSearchGrid(t);
+          overlayTherapistBreaksOnSearchGrid(t);
+        }
       }
     };
 
@@ -881,18 +1170,37 @@
         buildSearchTherapistOptions();
       });
     }
-    if (searchMaxHoursInput) {
-      searchMaxHoursInput.addEventListener('input', () => {
+    if (searchCurrentHoursInput) {
+      searchCurrentHoursInput.addEventListener('input', () => {
         buildSearchTherapistOptions();
+      });
+    }
+    if (searchBreakMinsInput) {
+      searchBreakMinsInput.addEventListener('input', () => {
+        // Re-apply overlays on break time change
+        if (!searchTherapistSelect || !searchTherapistSelect.value) return;
+        clearTherapistBusyOverlay();
+        clearSearchCaseOverlay();
+        const t = therapists.find((x) => x.id === searchTherapistSelect.value);
+        if (t) {
+          overlayTherapistCaseColorsOnSearchGrid(t);
+          overlayTherapistBlockTotalsOnSearchGrid(t);
+          overlayTherapistBreaksOnSearchGrid(t);
+        }
       });
     }
     if (searchTherapistSelect) {
       searchTherapistSelect.addEventListener('change', () => {
         clearTherapistBusyOverlay();
+        clearSearchCaseOverlay();
         const id = searchTherapistSelect.value;
-        if (!id) return;
-        const t = therapists.find((x) => x.id === id);
-        if (t) overlayTherapistOnSearchGrid(t);
+        const t = id ? therapists.find((x) => x.id === id) : null;
+        renderSearchLegendForTherapist(t || null);
+        if (t) {
+          overlayTherapistCaseColorsOnSearchGrid(t);
+          overlayTherapistBlockTotalsOnSearchGrid(t);
+          overlayTherapistBreaksOnSearchGrid(t);
+        }
       });
     }
 
@@ -900,6 +1208,7 @@
     populateTherapistSelectDropdown();
     populateTherapistList();
     buildSearchTherapistOptions();
+    renderSearchLegendForTherapist(null);
     // Build grids first, then render
     Grid.generateTimeSlots(editBookingScheduleGrid, getEditInc(), {
       onMouseDown: handleEditMouseDown,

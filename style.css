@@ -276,6 +276,21 @@ h1, h2, h3 {
     opacity: 1;
 }
 
+/* Badge for block total hours (Edit Booking single-case) */
+.block-total-label {
+    position: absolute;
+    right: 4px;
+    bottom: 2px;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 5;
+}
+
 /* Dynamic colors for cases (lighter shades) */
 .case-color-0 { background-color: #aed6f1; } /* Light Blue */
 .case-color-1 { background-color: #a9dfbf; } /* Light Green */
@@ -312,23 +327,49 @@ h1, h2, h3 {
 .time-slot.partial.partial-top::after { top: 0; }
 .time-slot.partial.partial-bottom::after { bottom: 0; }
 
-/* Therapist busy overlay (red) */
+/* Travel/Break overlay (yellow) for Search grid */
+.time-slot.break::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--break-height, 50%);
+    background-color: #ffe082; /* soft yellow */
+    pointer-events: none;
+    z-index: 4; /* above case overlay and blue partial */
+    top: 0; /* overlay starts from top of the cell by default */
+}
+/* When break fills the bottom of the display cell (e.g., block ends mid-cell) */
+.time-slot.break.break-bottom::after {
+    top: auto;
+    bottom: 0;
+}
+
+/* Therapist busy overlay (red) -- legacy; not used when case colors are enabled */
 .time-slot.busy::after {
     content: "";
     position: absolute;
     left: 0;
     right: 0;
     height: var(--busy-height, 50%);
-    background-color: #ff4d4f; /* red busy overlay */
+    background-color: #ff4d4f;
     pointer-events: none;
-    z-index: 2; /* render above blue partial */
+    z-index: 2;
 }
 .time-slot.busy.busy-top::after { top: 0; }
 .time-slot.busy.busy-bottom::after { bottom: 0; }
-
-/* Full busy coverage */
 .time-slot.busy-full {
     background-color: #ff4d4f !important;
+}
+
+/* Case-color overlay for Search (drawn above blue selection) */
+.time-slot.case-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--case-gradient, none);
+    z-index: 3; /* ensure it's above blue partial selection */
+    pointer-events: none;
 }
 
 .schedule-container {
@@ -408,4 +449,50 @@ h1, h2, h3 {
 }
 .search-form button {
     align-self: flex-start;
+}
+
+/* Search filters layout */
+.search-filters {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px 12px;
+    background: #fff;
+}
+.search-filters .sf-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.search-filters select,
+.search-filters input[type="number"] {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    height: 32px;
+}
+.search-filters .checkbox-group label {
+    margin-right: 10px;
+}
+
+/* Tighter width for Current Hours field */
+#search-current-hours {
+    width: 90px;
+}
+
+/* Inline legend styling to match app look */
+.legend-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+.legend-inline .legend-swatch {
+    width: 14px;
+    height: 14px;
 }

@@ -27,14 +27,13 @@
 
             <!-- New Therapist/Filter controls -->
             <div class="search-filters" style="margin: 12px 0;">
-                <label style="margin-right:8px;">Therapist:
+                <label class="sf-item">Therapist:
                     <select id="search-therapist-select">
                         <option value="">Select Therapist...</option>
                     </select>
                 </label>
-                <span style="margin:0 10px;"></span>
-                <label>Borough:
-                    <span id="search-borough-filter" class="checkbox-group" style="margin-left:6px;">
+                <label class="sf-item">Borough:
+                    <span id="search-borough-filter" class="checkbox-group">
                         <label><input type="checkbox" value="Manhattan"> Manhattan</label>
                         <label><input type="checkbox" value="Bronx"> Bronx</label>
                         <label><input type="checkbox" value="Brooklyn"> Brooklyn</label>
@@ -42,10 +41,15 @@
                         <label><input type="checkbox" value="Staten Island"> Staten Island</label>
                     </span>
                 </label>
-                <span style="margin:0 10px;"></span>
-                <label>Max Hours:
-                    <input type="number" id="search-max-hours" placeholder="e.g. 20" min="0" style="width:90px; margin-left:6px;">
+                <label class="sf-item">Current Hours:
+                    <input type="number" id="search-current-hours" placeholder="e.g. 20" min="0">
                 </label>
+                <label class="sf-item">Travel/Break Time (min):
+                    <input type="number" id="search-break-mins" placeholder="e.g. 30" min="0" max="120" step="15">
+                </label>
+
+                <!-- Per-case legend for selected therapist (populated dynamically) -->
+                <div class="schedule-legend legend-inline" id="search-cases-legend" aria-label="Therapist cases"></div>
             </div>
             
             <div class="schedule-container">
@@ -65,9 +69,6 @@
                 <div id="search-legend" class="legend-item" style="margin: 6px 0;">
                     <span class="legend-swatch" style="background-color:#007bff;"></span>
                     <span>Required availability (Your selected slots)</span>
-                    <span style="margin-left:14px;"></span>
-                    <span class="legend-swatch" style="background-color:#ff4d4f;"></span>
-                    <span>Therapist currently scheduled</span>
                 </div>
                 <div id="search-schedule-grid" class="schedule-grid">
                     <div class="grid-header">Time</div>
