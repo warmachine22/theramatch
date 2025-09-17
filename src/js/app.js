@@ -81,6 +81,8 @@
     // Referrals tab
     const addNewReferralButton = document.getElementById('add-new-referral-button');
     const referralsListBody = document.getElementById('referrals-list-body');
+    const referralChildrenDatalist = document.getElementById('referral-children-list');
+    const referralOptionMap = new Map();
 
     // Remove any unsaved draft (new referral) rows from the Referrals table
     const cleanupNewReferralDraft = () => {
@@ -522,6 +524,32 @@
       });
     };
 
+    // Build searchable datalist for referrals (Child Name — #ID)
+    const buildReferralChildDatalist = () => {
+      if (!referralChildrenDatalist) return;
+      referralChildrenDatalist.innerHTML = '';
+      referralOptionMap.clear();
+      const refs = TMS.Store.getReferrals() || [];
+      const sorted = [...refs].sort((a, b) => {
+        const an = (a.childName || '').toLowerCase();
+        const bn = (b.childName || '').toLowerCase();
+        if (an !== bn) return an.localeCompare(bn);
+        const aid = (a.childId || '').toLowerCase();
+        const bid = (b.childId || '').toLowerCase();
+        return aid.localeCompare(bid);
+      });
+      sorted.forEach((r) => {
+        const name = (r.childName || '').trim();
+        const cid = (r.childId || '').trim();
+        if (!name && !cid) return;
+        const display = cid ? `${name} — #${cid}` : name;
+        const opt = document.createElement('option');
+        opt.value = display;
+        referralChildrenDatalist.appendChild(opt);
+        referralOptionMap.set(display, r.id);
+      });
+    };
+
     const loadReferralToSearch = (ref) => {
       if (!ref) return;
 
@@ -669,8 +697,10 @@
               if (d >= dayRange[0] && d <= dayRange[1] && t >= timeRange[0] && t <= timeRange[1]) {
                 cell.classList.add('dragging-highlight');
               }
-            });
-          };
+      });
+      // Keep the search child datalist in sync with current referrals
+      buildReferralChildDatalist();
+    };
 
           const applyRefToggleForDisplaySlot = (slotEl) => {
             const inc = getInc();
@@ -819,6 +849,7 @@
           if (!confirm('Delete this referral?')) return;
           TMS.Store.deleteReferral(r.id);
           renderReferralsList();
+          buildReferralChildDatalist();
         });
 
         saveBtn.addEventListener('click', () => {
@@ -837,6 +868,7 @@
           try {
             TMS.Store.updateReferral(r.id, patch);
             renderReferralsList();
+            buildReferralChildDatalist();
           } catch (e) {
             if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
               alert('Another referral already exists with this Child ID. Please change the Child ID or edit the existing referral.');
@@ -1126,6 +1158,7 @@
         try {
           TMS.Store.addReferral(ref);
           renderReferralsList();
+          buildReferralChildDatalist();
           alert('Referral saved.');
         } catch (e) {
           if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
@@ -1809,6 +1842,10 @@
         therapists = Store.getTherapists();
         populateTherapistSelectDropdown();
         populateTherapistList();
+        // Refresh referrals and datalist after import
+        renderReferralsList();
+        buildReferralChildDatalist();
+
         currentTherapistDisplayName.textContent = 'Select a Therapist';
         caseDropdown.innerHTML = '<option value="all">View All Cases</option><option value="">Select a case...</option>';
         editBookingScheduleTitle.textContent = 'Select a Case';
@@ -1882,6 +1919,33 @@
     if (searchMaxPerDayInput) {
       searchMaxPerDayInput.addEventListener('input', () => { maxPerDayDirty = true; });
     }
+
+    // Search tab: datalist selection of children -> load referral into Search (read-only)
+    if (searchChildNameInput) {
+      searchChildNameInput.addEventListener('change', () => {
+        const val = (searchChildNameInput.value || '').trim();
+        if (!val) return;
+        let ref = null;
+        const rid = referralOptionMap.get(val);
+        if (rid) {
+          ref = TMS.Store.findReferral(rid);
+        } else {
+          const m = val.match(/#\s*(.+)$/);
+          if (m && m[1]) {
+            ref = TMS.Store.findReferralByChildId((m[1] || '').trim());
+          } else {
+            const candidates = (TMS.Store.getReferrals() || []).filter(r =>
+              (r.childName || '').trim().toLowerCase() === val.toLowerCase()
+            );
+            if (candidates.length === 1) ref = candidates[0];
+          }
+        }
+        if (ref) {
+          loadReferralToSearch(ref);
+        }
+      });
+    }
+
     // Save referral (removed)
     if (addNewReferralButton) {
       addNewReferralButton.addEventListener('click', addNewReferralInline);
@@ -1893,6 +1957,7 @@
     buildSearchTherapistOptions();
     renderSearchLegendForTherapist(null);
     renderReferralsList();
+    buildReferralChildDatalist();
     // Build grids first, then render
     Grid.generateTimeSlots(editBookingScheduleGrid, getEditInc(), {
       onMouseDown: handleEditMouseDown,

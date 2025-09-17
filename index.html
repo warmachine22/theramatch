@@ -10,10 +10,10 @@
 
     <div class="container">
         <div class="tabs">
-            <button class="tab-button active" data-tab="search">Search</button>
             <button class="tab-button" data-tab="add-therapist">Add Therapist</button>
             <button class="tab-button" data-tab="edit-booking">Edit Booking</button>
             <button class="tab-button" data-tab="referrals">Referrals</button>
+            <button class="tab-button active" data-tab="search">Search</button>
         </div>
 
         <!-- SEARCH TAB -->
@@ -21,7 +21,8 @@
             <h2>Search Schedule by Location</h2>
             <div class="search-form">
                 <!-- Child & referral info -->
-                <input type="text" id="search-child-name" placeholder="Child Name">
+                <input type="text" id="search-child-name" placeholder="Child Name" list="referral-children-list">
+                <datalist id="referral-children-list"></datalist>
                 <input type="text" id="search-child-id" placeholder="Child ID Number">
                 <div class="form-field">
                     <label>Total Referred Hours and Max Desired Hours/Day</label>
