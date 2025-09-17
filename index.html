@@ -63,8 +63,8 @@
                         <label><input type="checkbox" value="Staten Island"> Staten Island</label>
                     </span>
                 </label>
-                <label class="sf-item">Current Hours:
-                    <input type="number" id="search-current-hours" placeholder="e.g. 20" min="0">
+                <label class="sf-item">Required Hours:
+                    <input type="number" id="search-required-hours" placeholder="e.g. 20" min="0">
                 </label>
                 <label class="sf-item">Travel/Break Time (min):
                     <input type="number" id="search-break-mins" placeholder="e.g. 30" min="0" max="120" step="15">
@@ -160,6 +160,7 @@
                 <input type="text" id="new-therapist-last-name" placeholder="Last Name">
                 <input type="text" id="new-therapist-email" placeholder="Email Address">
                 <input type="text" id="new-therapist-phone" placeholder="Phone Number">
+                <input type="number" id="new-therapist-required-hours" placeholder="Required Hours per Week" min="0" step="1">
                 <div class="form-field">
                     <label>Borough Preferences</label>
                     <div class="checkbox-group" id="borough-prefs-group">
@@ -182,6 +183,7 @@
                             <th>Last Name</th>
                             <th>Phone Number</th>
                             <th>Email Address</th>
+                            <th>Required Hours/wk</th>
                             <th>Total Hours Scheduled</th>
                             <th>Actions</th>
                         </tr>
@@ -212,11 +214,15 @@
                     <option value="all">View All Cases</option>
                     <option value="">Select a case...</option>
                 </select>
-                <button id="add-new-case-button" class="btn btn-primary">Add New</button>
+                <label for="referral-assign-select" style="margin-left:10px;">Assign from Referral:</label>
+                <select id="referral-assign-select">
+                    <option value="">Select child from referrals...</option>
+                </select>
                 <button id="edit-child-button" class="btn btn-secondary disabled" disabled>Edit Child</button>
             </div>
+            <div id="referral-assigned-info" class="info-panel"></div>
 
-            <div id="new-case-form" class="new-case-form">
+            <div id="new-case-form" class="new-case-form" style="display:none;">
                 <input type="text" id="first-name" placeholder="First Name">
                 <input type="text" id="last-name" placeholder="Last Name">
                 <input type="text" id="cross-streets" placeholder="Cross Streets (e.g., Oak St & Maple Ave)">

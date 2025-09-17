@@ -62,6 +62,9 @@
     const stateInput = document.getElementById('state');
     const zipInput = document.getElementById('zip');
     const idNumberInput = document.getElementById('id-number');
+    // Assign from Referral (Edit Booking)
+    const referralAssignSelect = document.getElementById('referral-assign-select');
+    const referralAssignedInfo = document.getElementById('referral-assigned-info');
 
     const exportDataButton = document.getElementById('export-data-button');
     const importDataInput = document.getElementById('import-data-input');
@@ -75,6 +78,7 @@
     const newTherapistLastNameInput = document.getElementById('new-therapist-last-name');
     const newTherapistEmailInput = document.getElementById('new-therapist-email');
     const newTherapistPhoneInput = document.getElementById('new-therapist-phone');
+    const newTherapistRequiredHoursInput = document.getElementById('new-therapist-required-hours');
     const boroughPrefsGroup = document.getElementById('borough-prefs-group');
     const boroughFilterGroup = document.getElementById('borough-filter-group');
 
@@ -83,7 +87,7 @@
     // New Search controls
     const searchTherapistSelect = document.getElementById('search-therapist-select');
     const searchBoroughFilterGroup = document.getElementById('search-borough-filter');
-    const searchCurrentHoursInput = document.getElementById('search-current-hours');
+    const searchRequiredHoursInput = document.getElementById('search-required-hours');
     const searchCasesLegend = document.getElementById('search-cases-legend');
     const searchBreakMinsInput = document.getElementById('search-break-mins');
     // Referral entry fields
@@ -139,16 +143,16 @@
     const buildSearchTherapistOptions = () => {
       if (!searchTherapistSelect) return;
       const boroughs = getActiveSearchBoroughs();
-      const currentHoursStr = (searchCurrentHoursInput && searchCurrentHoursInput.value || '').trim();
-      const currentHours = currentHoursStr === '' ? null : Number(currentHoursStr);
+      const requiredHoursStr = (searchRequiredHoursInput && searchRequiredHoursInput.value || '').trim();
+      const requiredHours = requiredHoursStr === '' ? null : Number(requiredHoursStr);
       // Clear current options
       searchTherapistSelect.innerHTML = '<option value="">Select Therapist...</option>';
       let list = therapists;
       if (boroughs.length > 0) {
         list = list.filter((t) => (t.boroughPrefs || []).some((b) => boroughs.includes(b)));
       }
-      if (currentHours !== null && !Number.isNaN(currentHours)) {
-        list = list.filter((t) => (t.totalHours ?? 0) <= currentHours);
+      if (requiredHours !== null && !Number.isNaN(requiredHours)) {
+        list = list.filter((t) => (t.totalHours ?? 0) <= requiredHours);
       }
       const sorted = [...list].sort((a, b) => (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`));
       sorted.forEach((t) => {
@@ -564,6 +568,33 @@
       });
     };
 
+    // Build options for assigning referrals to therapist (Edit Booking)
+    const buildReferralAssignOptions = () => {
+      const sel = referralAssignSelect;
+      if (!sel) return;
+      const refs = TMS.Store.getReferrals() || [];
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Select child from referrals...</option>';
+      const sorted = [...refs].sort((a, b) => {
+        const an = (a.childName || '').toLowerCase();
+        const bn = (b.childName || '').toLowerCase();
+        if (an !== bn) return an.localeCompare(bn);
+        const aid = (a.childId || '').toLowerCase();
+        const bid = (b.childId || '').toLowerCase();
+        return aid.localeCompare(bid);
+      });
+      sorted.forEach((r) => {
+        const name = (r.childName || '').trim();
+        const cid = (r.childId || '').trim();
+        if (!name && !cid) return;
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = cid ? `${name} — #${cid}` : name;
+        sel.appendChild(opt);
+      });
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    };
+
     const loadReferralToSearch = (ref) => {
       if (!ref) return;
 
@@ -865,6 +896,7 @@
           TMS.Store.deleteReferral(r.id);
           renderReferralsList();
           buildReferralChildDatalist();
+          buildReferralAssignOptions();
         });
 
         saveBtn.addEventListener('click', () => {
@@ -884,6 +916,7 @@
             TMS.Store.updateReferral(r.id, patch);
             renderReferralsList();
             buildReferralChildDatalist();
+            buildReferralAssignOptions();
           } catch (e) {
             if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
               alert('Another referral already exists with this Child ID. Please change the Child ID or edit the existing referral.');
@@ -1174,6 +1207,7 @@
           TMS.Store.addReferral(ref);
           renderReferralsList();
           buildReferralChildDatalist();
+          buildReferralAssignOptions();
           alert('Referral saved.');
         } catch (e) {
           if (e && (e.code === 'DUPLICATE_CHILD_ID' || e.message === 'DUPLICATE_CHILD_ID')) {
@@ -1401,6 +1435,7 @@
           <td>${t.lastName || ''}</td>
           <td>${t.phone || ''}</td>
           <td>${t.email || ''}</td>
+          <td>${t.requiredHours ?? 0} hrs</td>
           <td>${t.totalHours ?? 0} hrs</td>
           <td>
             <button class="view-schedule-btn" data-therapist-id="${t.id}">View Schedule</button>
@@ -1422,6 +1457,7 @@
               <div class="form-row">
                 <input type="text" class="edit-email" value="${t.email || ''}" placeholder="Email Address">
                 <input type="text" class="edit-phone" value="${t.phone || ''}" placeholder="Phone Number">
+                <input type="number" class="edit-required-hours" value="${t.requiredHours ?? 0}" placeholder="Required Hours per Week" min="0" step="1">
               </div>
               <div class="form-row">
                 <label>Borough Preferences</label>
@@ -1469,6 +1505,7 @@
           const last = editRow.querySelector('.edit-last').value.trim();
           const email = editRow.querySelector('.edit-email').value.trim();
           const phone = editRow.querySelector('.edit-phone').value.trim();
+          const requiredHours = Number(editRow.querySelector('.edit-required-hours')?.value || 0);
           const boroughPrefs = Array.from(editRow.querySelectorAll('.checkbox-group input[type="checkbox"]:checked')).map((el) => el.value);
 
           if (!first || !last) {
@@ -1477,7 +1514,7 @@
           }
 
           therapists = Store.setTherapists((prev) =>
-            prev.map((x) => x.id === t.id ? { ...x, firstName: first, lastName: last, email, phone, boroughPrefs } : x)
+            prev.map((x) => x.id === t.id ? { ...x, firstName: first, lastName: last, email, phone, requiredHours, boroughPrefs } : x)
           );
 
           populateTherapistList();
@@ -1845,10 +1882,73 @@
       }
       const t = therapists.find((x) => x.id === id);
       if (t) loadTherapistSchedule(t);
+
+      // Clear referral selection/info when switching therapist
+      if (referralAssignSelect) { referralAssignSelect.value = ''; }
+      if (referralAssignedInfo) { referralAssignedInfo.innerHTML = ''; }
     });
 
+    // Assign from Referral -> create/select case for current therapist
+    if (referralAssignSelect) {
+      referralAssignSelect.addEventListener('change', () => {
+        const rid = referralAssignSelect.value;
+        if (!rid) { if (referralAssignedInfo) referralAssignedInfo.innerHTML = ''; return; }
+        if (!currentSelectedTherapist) {
+          alert('Please select a therapist first.');
+          referralAssignSelect.value = '';
+          return;
+        }
+        const ref = TMS.Store.findReferral(rid) || (TMS.Store.getReferrals() || []).find(r => r.id === rid);
+        if (!ref) return;
+
+        // If case already exists for this child ID, select it; else create a new case
+        let existing = currentSelectedTherapist.cases.find(c => (c.patientId || '') === (ref.childId || ''));
+        if (!existing) {
+          const baseId = slugify(`${(ref.childName || 'child')}-${(ref.childId || '')}`.trim());
+          let newCaseId = baseId || `case-${Date.now()}`;
+          let idx = 1;
+          while (currentSelectedTherapist.cases.some((c) => c.id === newCaseId)) {
+            newCaseId = `${baseId}-${idx++}`;
+          }
+          const nextColorIndex = ((currentSelectedTherapist.cases.reduce((m, c) => Math.max(m, (typeof c.colorIndex === 'number' ? c.colorIndex : -1)), -1)) + 1) % 10;
+          const newCase = {
+            id: newCaseId,
+            name: ref.childName || '',
+            patientId: ref.childId || '',
+            crossStreets: ref.crossStreets || '',
+            address: '',
+            city: ref.city || '',
+            state: ref.state || '',
+            zip: ref.zip || '',
+            schedule: [],
+            colorIndex: nextColorIndex
+          };
+          therapists = Store.setTherapists((prev) => {
+            return prev.map((t) => {
+              if (t.id !== currentSelectedTherapist.id) return t;
+              return { ...t, cases: [...t.cases, newCase] };
+            });
+          });
+          currentSelectedTherapist = therapists.find((t) => t.id === currentSelectedTherapist.id);
+          existing = currentSelectedTherapist.cases.find((c) => c.id === newCaseId);
+          populateCaseDropdown(currentSelectedTherapist);
+        }
+
+        caseDropdown.value = existing.id;
+        renderSingleOrAll();
+
+        if (referralAssignedInfo) {
+          referralAssignedInfo.innerHTML = `
+            <div><strong>${ref.childName || ''}</strong> — #${ref.childId || ''} (${ref.status || 'referred'})</div>
+            <div>${ref.crossStreets || ''}</div>
+            <div>${ref.city || ''}, ${ref.state || ''} ${ref.zip || ''}</div>
+          `;
+        }
+      });
+    }
+
     // Add/Edit case UI
-    addNewCaseButton.addEventListener('click', () => {
+    if (addNewCaseButton) addNewCaseButton.addEventListener('click', () => {
       newCaseForm.classList.add('expanded');
       clearCaseForm();
       Render.clearGrid(editBookingScheduleGrid);
@@ -1945,6 +2045,7 @@
         const last = (newTherapistLastNameInput && newTherapistLastNameInput.value || '').trim();
         const email = (newTherapistEmailInput && newTherapistEmailInput.value || '').trim();
         const phone = (newTherapistPhoneInput && newTherapistPhoneInput.value || '').trim();
+        const requiredHours = Number(newTherapistRequiredHoursInput && newTherapistRequiredHoursInput.value || 0);
         if (!first || !last) {
           alert('Please enter first and last name.');
           return;
@@ -1956,7 +2057,7 @@
           id = `${baseId}-${counter++}`;
         }
         const boroughPrefs = Array.from(document.querySelectorAll('#borough-prefs-group input[name="borough-pref"]:checked')).map((el) => el.value);
-        const newTherapist = { id, firstName: first, lastName: last, phone, email, boroughPrefs, cases: [], totalHours: 0 };
+        const newTherapist = { id, firstName: first, lastName: last, phone, email, requiredHours, boroughPrefs, cases: [], totalHours: 0 };
         therapists = Store.setTherapists((prev) => [...prev, newTherapist]);
         populateTherapistSelectDropdown();
         populateTherapistList();
@@ -1965,6 +2066,7 @@
         if (newTherapistLastNameInput) newTherapistLastNameInput.value = '';
         if (newTherapistEmailInput) newTherapistEmailInput.value = '';
         if (newTherapistPhoneInput) newTherapistPhoneInput.value = '';
+        if (newTherapistRequiredHoursInput) newTherapistRequiredHoursInput.value = '';
         if (boroughPrefsGroup) {
           boroughPrefsGroup.querySelectorAll('input[name="borough-pref"]').forEach((el) => { el.checked = false; });
         }
@@ -2003,6 +2105,7 @@
         // Refresh referrals and datalist after import
         renderReferralsList();
         buildReferralChildDatalist();
+        buildReferralAssignOptions();
 
         currentTherapistDisplayName.textContent = 'Select a Therapist';
         caseDropdown.innerHTML = '<option value="all">View All Cases</option><option value="">Select a case...</option>';
@@ -2032,8 +2135,8 @@
         buildSearchTherapistOptions();
       });
     }
-    if (searchCurrentHoursInput) {
-      searchCurrentHoursInput.addEventListener('input', () => {
+    if (searchRequiredHoursInput) {
+      searchRequiredHoursInput.addEventListener('input', () => {
         buildSearchTherapistOptions();
       });
     }
@@ -2116,6 +2219,7 @@
     renderSearchLegendForTherapist(null);
     renderReferralsList();
     buildReferralChildDatalist();
+    buildReferralAssignOptions();
     // Build grids first, then render
     Grid.generateTimeSlots(editBookingScheduleGrid, getEditInc(), {
       onMouseDown: handleEditMouseDown,
